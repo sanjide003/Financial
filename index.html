@@ -1,228 +1,338 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ml">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' https: data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src https://*.firebaseapp.com;">
-    <meta name="referrer" content="no-referrer">
-    <title>Institution Portal</title>
-    
+    <meta name="theme-color" content="#10b981">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#ffffff">
-    <link rel="apple-touch-icon" href="assets/images/logo.png">
-
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>FinTrack - Personal Finance</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="scripts/shared/session-guard.js"></script>
-    
-    <!-- Global CSS Link -->
-    <link rel="stylesheet" href="styles/main.css">
-    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Firebase SDK (v9 Modular) -->
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/db.js"></script>
+    <script type="module" src="js/calc.js"></script>
+    <script type="module" src="js/app.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { primary: '#10b981', secondary: '#3b82f6', dark: '#1f2937' }
+                }
+            }
+        }
+    </script>
 </head>
-<body style="background-color: #ffffff;">
-    <div id="splash-screen">
-        <div class="loader-wrapper"><div class="logo-container"><div class="circle-loader"></div><img id="splash-logo-img" src="" alt=""></div><div class="loading-text">Initializing...</div></div>
-    </div>
+<body class="bg-gray-50 text-gray-800 antialiased h-screen flex flex-col overflow-hidden">
 
-    <header>
-        <div class="nav-container">
-            <div class="header-logo-box">
-                <img id="header-logo" src="assets/images/logo.png" alt="Logo" onerror="this.style.display='none'">
+    <!-- Login/Auth Screen -->
+    <section id="view-auth" class="view-section active h-full flex items-center justify-center bg-white px-6">
+        <div class="w-full max-w-sm text-center">
+            <div class="w-20 h-20 bg-primary rounded-2xl mx-auto flex items-center justify-center text-white text-4xl mb-6 shadow-lg shadow-emerald-200">
+                <i class="fa-solid fa-wallet"></i>
             </div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">FinTrack</h1>
+            <p class="text-gray-500 mb-8 text-sm">നിങ്ങളുടെ സാമ്പത്തിക കാര്യങ്ങൾ ഇവിടെ സുരക്ഷിതമാണ്</p>
             
-            <div class="header-center-box">
-                <h1 id="header-title">Institution</h1>
-                <p id="header-subtitle" class="hidden"><span id="header-regno"></span> <span id="header-sep" class="mx-1 hidden">|</span> <span id="header-place"></span></p>
-            </div>
-
-            <!-- Hamburger Icon Animated -->
-            <button class="mobile-toggle" id="mobile-menu-btn" aria-label="Toggle navigation menu" aria-expanded="false" type="button">
-                <div class="menu-icon-wrapper">
-                    <i class="fas fa-bars icon-bars"></i>
-                    <i class="fas fa-times icon-close"></i>
-                </div>
+            <button id="btn-login" class="w-full bg-white border border-gray-200 shadow-sm text-gray-700 font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-50 transition-colors">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
+                Google വഴി ലോഗിൻ ചെയ്യുക
             </button>
-            
-            <ul class="nav-menu" aria-label="Primary navigation">
-                <li><a href="#" onclick="window.scrollTo(0,0)" class="nav-link">Home</a></li>
-                <li><a href="#about" class="nav-link" onclick="smoothScrollTo(event, 'about-container')">About</a></li>
-                <li id="nav-teachers-link" class="hidden"><a href="#teachers" class="nav-link" onclick="smoothScrollTo(event, 'teachers-container')">Teachers</a></li>
-                <li id="nav-management-link" class="hidden"><a href="#management" class="nav-link" onclick="smoothScrollTo(event, 'management-container')">Management</a></li>
-                <li id="nav-dynamic-directory-links" class="hidden"></li>
-                <li id="nav-notices-link" class="hidden"><a href="#notices" class="nav-link" onclick="smoothScrollTo(event, 'notices-container')">Notices</a></li>
-                <li id="nav-gallery-link" class="hidden"><a href="#gallery" class="nav-link" onclick="smoothScrollTo(event, 'gallery-container')">Gallery</a></li>
-                <li id="install-app-container" class="hidden"><button id="install-app-btn" class="install-btn-nav"><i class="fas fa-download"></i> Install App</button></li>
-                <li><button onclick="window.openLogin()" class="login-btn-nav"><i class="fas fa-sign-in-alt mr-1"></i> Login</button></li>
-            </ul>
+            <p id="auth-error" class="text-red-500 text-xs mt-4 hidden"></p>
         </div>
-    </header>
-
-    <section class="hero" id="hero-section">
-        <div class="hero-logo-target visible" id="hero-logo-target">
-            <img id="hero-logo-img" src="assets/images/logo.png" alt="Hero Logo" onerror="this.style.display='none'">
-        </div>
-        
-        <div class="hero-title-container">
-            <h1 id="hero-main-title">Institution Name</h1>
-        </div>
-        
-        <p id="hero-subtitle" class="subtitle">Excellence in Education</p>
-        <p class="inst-info"><span id="hero-regno"></span> <span id="hero-place-separator" class="hidden"> | </span> <span id="hero-place"></span></p>
-        
-        <div class="hero-actions-wrapper">
-            <button onclick="window.openLogin()" class="main-login-btn">
-                <i class="fas fa-sign-in-alt"></i> Login
-            </button>
-            
-            <div class="secondary-actions">
-                <a href="#teachers" class="compact-btn hidden" id="hero-btn-teachers" onclick="smoothScrollTo(event, 'teachers-container')">
-                    <i class="fas fa-chalkboard-teacher icon-teachers"></i> Teachers
-                </a>
-                <a href="#notices" class="compact-btn hidden" id="hero-btn-notice" onclick="smoothScrollTo(event, 'notices-container')">
-                    <i class="fas fa-bell icon-notices"></i> Notices
-                </a>
-                <a href="#gallery" class="compact-btn hidden" id="hero-btn-gallery" onclick="smoothScrollTo(event, 'gallery-container')">
-                    <i class="fas fa-images icon-gallery"></i> Gallery
-                </a>
-            </div>
-        </div>
-
-        <section class="stats-grid">
-            <div class="stat-card stat-blue"><div><div class="stat-title">STUDENTS</div><div class="stat-count" id="stat-total">-</div></div><div class="stat-icon"><i class="fa-solid fa-users"></i></div></div>
-            <div class="stat-card stat-yellow"><div><div class="stat-title">TEACHERS</div><div class="stat-count" id="stat-staff">-</div></div><div class="stat-icon"><i class="fa-solid fa-chalkboard-user"></i></div></div>
-            <div class="stat-card stat-green"><div><div class="stat-title">MALE</div><div class="stat-count" id="stat-male">-</div></div><div class="stat-icon"><i class="fa-solid fa-person"></i></div></div>
-            <div class="stat-card stat-teal"><div><div class="stat-title">FEMALE</div><div class="stat-count" id="stat-female">-</div></div><div class="stat-icon"><i class="fa-solid fa-person-dress"></i></div></div>
-        </section>
     </section>
 
-    <div class="container" id="about-container">
-        <div class="section-header"><h3>About Us</h3><div></div></div>
-        <div class="about-box"><p id="about-desc">Loading description...</p></div>
-    </div>
-
-    <div class="container hidden" id="teachers-container">
-        <div class="section-header"><h3 class="section-heading-pill">Teachers</h3><div></div></div>
-        <div class="scroll-wrapper" id="teachers-list"></div>
-    </div>
-
-    <div class="container hidden" id="management-container">
-        <div class="section-header">
-            <button type="button" id="management-toggle-btn" class="accordion-heading-btn section-heading-pill" onclick="window.togglePublicAccordion('management-accordion')">
-                <span>Management</span>
-                <i class="fas fa-chevron-down text-sm" data-accordion-icon="management-accordion"></i>
-            </button>
-            <div></div>
-        </div>
-        <div id="management-accordion" data-accordion-content class="hidden mt-3">
-            <div class="scroll-wrapper" id="comm-list"></div>
-        </div>
-    </div>
-
-    <div class="container hidden" id="dynamic-directory-container">
-        <div id="dynamic-directory-sections" class="space-y-6"></div>
-    </div>
-
-    <!-- Notices Section -->
-    <div class="container hidden" id="notices-container">
-        <div class="section-header"><h3>Notifications</h3><div></div></div>
-        <div id="notices-list" class="notice-grid notice-grid-scroll"></div>
-    </div>
-
-    <!-- Gallery Section -->
-    <div class="container hidden" id="gallery-container">
-        <div class="section-header"><h3>Gallery</h3><div></div></div>
-        <div id="gallery-list" class="gallery-swipe-container"></div>
-    </div>
-
-    <!-- Compact Footer -->
-    <footer class="footer">
-        <div class="follow-title">FOLLOW US</div>
-        <div class="socials">
-            <a href="#" id="link-youtube" target="_blank" class="hidden"><i class="fa-brands fa-youtube"></i></a>
-            <a href="#" id="link-telegram" target="_blank" class="hidden"><i class="fa-brands fa-telegram-plane"></i></a>
-            <a href="#" id="link-instagram" target="_blank" class="hidden"><i class="fa-brands fa-instagram"></i></a>
-            <a href="#" id="link-whatsapp" target="_blank" class="hidden"><i class="fa-brands fa-whatsapp"></i></a>
-            <a href="#" id="link-facebook" target="_blank" class="hidden"><i class="fa-brands fa-facebook-f"></i></a>
-        </div>
-        <div class="corporate">
-           <a href="#" id="footer-email-link"><i class="fas fa-envelope"></i> <span id="footer-email">Email</span></a>
-           <a href="#" id="footer-phone-link"><i class="fas fa-phone"></i> <span id="footer-phone">Phone</span></a>
-        </div>
-        <div class="divider"></div>
-        <div class="copy">© <span id="footer-inst-name">Institution Name</span>. All Rights Reserved.</div>
-        <div class="powered">Developed by <a href="https://www.instagram.com/muhammed_sanjide_p" target="_blank">HADI MAHIRI FAIZY</a></div>
-        <div class="app-version-meta">
-            <div id="footer-version">Version: --</div>
-            <div id="footer-updated">Last Updated: --</div>
-        </div>
-    </footer>
-
-    <!-- Login Modal -->
-    <div id="login-modal" class="modal-overlay">
-        <div class="modal-box">
-            <button type="button" class="modal-close-btn" aria-label="Close login modal" onclick="document.getElementById('login-modal').style.display='none'">&times;</button>
-            <div class="icon-badge"><i class="fas fa-lock"></i></div>
-            <h3 id="login-title" class="modal-title">Student Login</h3>
-            
-            <div id="student-login-form">
-                <select id="login-class" class="form-input"><option value="">Select Class</option></select>
-                <div class="input-with-icon">
-                    <input type="text" id="login-student-name" class="form-input form-input-tight" placeholder="Search Name or Adm No" autocomplete="off">
-                    <div id="student-suggestions" class="suggestions-box"></div>
-                </div>
-                <div class="input-with-icon">
-                    <input type="password" id="login-phone" class="form-input form-input-with-trailing-icon" placeholder="Password (Mobile Number)">
-                    <i class="fas fa-eye trailing-icon" id="toggle-student-pass"></i>
-                </div>
+    <!-- Main App Container (Hidden initially) -->
+    <div id="main-app" class="hidden h-full flex flex-col">
+        
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm px-4 py-3 flex justify-between items-center fixed top-0 w-full z-40">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center font-bold text-lg"><i class="fa-solid fa-wallet"></i></div>
+                <h1 class="text-xl font-bold text-gray-800 tracking-tight">FinTrack</h1>
             </div>
-
-            <p id="login-msg" class="auth-alert"></p>
-            <button id="login-submit" class="main-login-btn w-full rounded-xl"><i class="fas fa-sign-in-alt"></i> Login Securely</button>
-
-        </div>
-    </div>
-
-    <div id="saved-student-modal" class="modal-overlay">
-        <div class="modal-box">
-            <button type="button" class="modal-close-btn" aria-label="Close saved account modal" onclick="document.getElementById('saved-student-modal').style.display='none'">&times;</button>
-            <div class="icon-badge"><i class="fas fa-user-check"></i></div>
-            <h3 class="modal-title">Select Student Account</h3>
-            <div id="saved-student-list" class="space-y-2 mt-3 max-h-56 overflow-y-auto"></div>
-            <button id="saved-student-add-btn" class="main-login-btn w-full rounded-xl mt-3"><i class="fas fa-plus"></i> Add New Student</button>
-        </div>
-    </div>
-
-    <!-- Person Modal -->
-    <div id="person-modal" class="modal-overlay">
-        <div class="modal-box person-modal-box">
-            <button type="button" class="modal-close-btn modal-close-btn-top" aria-label="Close person modal" onclick="document.getElementById('person-modal').style.display='none'">&times;</button>
-            <img id="modal-img" src="" class="person-avatar">
-            <h3 id="modal-name" class="person-name person-modal-name"></h3>
-            <p id="modal-role" class="person-role person-modal-role"></p>
-            
-            <div class="person-meta">
-                <p class="person-meta-line"><i class="fas fa-map-marker-alt person-meta-icon"></i> <span class="person-meta-label">Place:</span> <span id="modal-address"></span></p>
-                <p class="person-meta-phone"><i class="fas fa-phone person-meta-icon"></i> <span class="person-meta-label">Phone:</span> <span id="modal-phone"></span></p>
+            <div class="flex items-center gap-3">
+                <div class="relative cursor-pointer bg-gray-100 p-2 rounded-full" onclick="window.app.switchTab('notifications')">
+                    <i class="fa-regular fa-bell text-gray-600"></i>
+                    <span id="unread-badge" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
+                </div>
+                <img id="user-avatar" src="" alt="User" class="w-8 h-8 rounded-full border border-gray-200 cursor-pointer" onclick="window.auth.logout()">
             </div>
-            <a id="modal-whatsapp-btn" class="modal-whatsapp-btn" target="_blank" rel="noopener noreferrer" aria-label="Send WhatsApp message">
-                <i class="fab fa-whatsapp"></i>
-            </a>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto mt-14 mb-16 px-4 py-4 w-full max-w-md mx-auto">
+
+            <!-- VIEW: HOME (Dashboard) -->
+            <section id="view-home" class="view-section">
+                <!-- Net Worth Card -->
+                <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-white shadow-lg mb-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
+                    <p class="text-gray-400 text-xs font-semibold tracking-wide uppercase mb-1">Total Net Worth</p>
+                    <h2 class="text-3xl font-bold mb-4" id="home-net-balance">₹0.00</h2>
+                    
+                    <div class="flex justify-between items-center border-t border-gray-700 pt-4 mt-2">
+                        <div>
+                            <p class="text-[10px] text-gray-400 uppercase tracking-wider">Income (This Month)</p>
+                            <p class="text-green-400 font-semibold text-sm" id="home-month-income">+ ₹0.00</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] text-gray-400 uppercase tracking-wider">Expense (This Month)</p>
+                            <p class="text-red-400 font-semibold text-sm" id="home-month-expense">- ₹0.00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EMI Alerts (Dynamic) -->
+                <div id="home-alerts" class="mb-6 hidden">
+                    <h3 class="text-sm font-bold text-red-600 uppercase tracking-wide mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Action Required
+                    </h3>
+                    <div id="home-alerts-list" class="space-y-2"></div>
+                </div>
+
+                <!-- My Accounts Quick View -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-end mb-3">
+                        <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide">My Accounts</h3>
+                        <button onclick="window.app.switchTab('accounts')" class="text-primary text-xs font-bold uppercase tracking-wide">Manage All</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3" id="home-accounts-list">
+                        <p class="text-xs text-gray-500 col-span-2">Loading accounts...</p>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div>
+                    <div class="flex justify-between items-end mb-3">
+                        <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide">Recent Transactions</h3>
+                        <button onclick="window.app.switchTab('transactions')" class="text-primary text-xs font-bold uppercase tracking-wide">View All</button>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100" id="home-recent-txns">
+                        <!-- Transactions dynamically injected -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: TRANSACTIONS (History) -->
+            <section id="view-transactions" class="view-section">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Transaction History</h2>
+                    <select id="filter-month" class="bg-white border border-gray-200 rounded-lg text-xs px-2 py-1 outline-none">
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-2 mb-4 overflow-x-auto hide-scrollbar pb-2" id="txn-filters">
+                    <button onclick="window.app.filterTxns('all')" class="filter-btn active px-4 py-1.5 bg-gray-800 text-white text-xs font-bold rounded-full uppercase tracking-wide">All</button>
+                    <button onclick="window.app.filterTxns('income')" class="filter-btn px-4 py-1.5 bg-gray-200 text-gray-700 text-xs font-bold rounded-full uppercase tracking-wide">Income</button>
+                    <button onclick="window.app.filterTxns('expense')" class="filter-btn px-4 py-1.5 bg-gray-200 text-gray-700 text-xs font-bold rounded-full uppercase tracking-wide">Expense</button>
+                    <button onclick="window.app.filterTxns('transfer')" class="filter-btn px-4 py-1.5 bg-gray-200 text-gray-700 text-xs font-bold rounded-full uppercase tracking-wide">Transfer</button>
+                    <button onclick="window.app.filterTxns('debt')" class="filter-btn px-4 py-1.5 bg-gray-200 text-gray-700 text-xs font-bold rounded-full uppercase tracking-wide">Debt</button>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100" id="full-txn-list">
+                    <!-- Transactions dynamically injected -->
+                </div>
+            </section>
+
+            <!-- VIEW: ADD TRANSACTION (Form) -->
+            <section id="view-add" class="view-section">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Add Record</h2>
+                
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <div class="grid grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg mb-6">
+                        <button type="button" onclick="window.app.setAddType('expense')" id="btn-type-expense" class="py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-red-600 transition-all">Expense</button>
+                        <button type="button" onclick="window.app.setAddType('income')" id="btn-type-income" class="py-2 text-xs font-bold uppercase rounded-md text-gray-500 transition-all">Income</button>
+                        <button type="button" onclick="window.app.setAddType('transfer')" id="btn-type-transfer" class="py-2 text-xs font-bold uppercase rounded-md text-gray-500 transition-all">Transfer</button>
+                        <button type="button" onclick="window.app.setAddType('debt')" id="btn-type-debt" class="py-2 text-xs font-bold uppercase rounded-md text-gray-500 transition-all">Debt</button>
+                    </div>
+
+                    <form id="add-form">
+                        <input type="hidden" id="form-type" value="expense">
+                        
+                        <div class="mb-5">
+                            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Amount (₹)</label>
+                            <input type="number" id="form-amount" required class="w-full text-3xl font-bold border-b-2 border-gray-200 focus:border-primary outline-none py-2 bg-transparent transition-colors" placeholder="0" step="0.01">
+                        </div>
+
+                        <div class="mb-4" id="wrap-category">
+                            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider" id="label-category">Category / Name</label>
+                            <input type="text" id="form-category" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all" placeholder="e.g. Groceries, Salary">
+                            <!-- Quick categories -->
+                            <div id="quick-cats" class="flex gap-2 mt-2 overflow-x-auto pb-1 hidden"></div>
+                        </div>
+
+                        <div class="mb-4" id="wrap-from-account">
+                            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider" id="label-from-account">Paid From</label>
+                            <select id="form-from-account" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all"></select>
+                        </div>
+
+                        <div class="mb-4 hidden" id="wrap-to-account">
+                            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider" id="label-to-account">Received In</label>
+                            <select id="form-to-account" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all"></select>
+                        </div>
+
+                        <div class="mb-4 hidden" id="wrap-debt-type">
+                            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Debt Type</label>
+                            <div class="flex gap-4">
+                                <label class="flex items-center gap-2 text-sm"><input type="radio" name="debt_direction" value="loan_given" checked class="accent-primary"> I Gave Money</label>
+                                <label class="flex items-center gap-2 text-sm"><input type="radio" name="debt_direction" value="loan_taken" class="accent-primary"> I Took Loan</label>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Date</label>
+                                <input type="date" id="form-date" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Notes</label>
+                                <input type="text" id="form-note" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Optional">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-save-record" class="w-full bg-primary text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-emerald-600 active:scale-[0.98] transition-all uppercase tracking-wide">
+                            Save Record
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- VIEW: REPORTS & ANALYTICS -->
+            <section id="view-reports" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Monthly Reports</h2>
+                    <input type="month" id="report-month" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-sm font-bold outline-none text-gray-700">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-green-50 p-4 rounded-xl border border-green-100 flex flex-col justify-center">
+                        <p class="text-[10px] text-green-600 font-bold uppercase tracking-wider mb-1">Total Income</p>
+                        <p class="text-xl font-bold text-green-700" id="rep-income">₹0</p>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col justify-center">
+                        <p class="text-[10px] text-red-600 font-bold uppercase tracking-wider mb-1">Total Expense</p>
+                        <p class="text-xl font-bold text-red-700" id="rep-expense">₹0</p>
+                    </div>
+                    <div class="col-span-2 bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
+                        <p class="text-xs text-blue-800 font-bold uppercase tracking-wider">Net Savings</p>
+                        <p class="text-xl font-bold text-blue-700" id="rep-savings">₹0</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-4">Expense Breakdown</h3>
+                    <div id="report-categories" class="space-y-4">
+                        <p class="text-sm text-gray-500 text-center py-4">No data for selected month</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: ACCOUNTS & DEBTS -->
+            <section id="view-accounts" class="view-section">
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Wallets & Banks</h2>
+                        <button onclick="window.app.showModal('modal-new-account')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add New</button>
+                    </div>
+                    <div id="accounts-full-list" class="space-y-3"></div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Debts & Loans</h2>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                            <p class="text-[10px] text-orange-600 font-bold uppercase mb-1">To Pay (Liabilities)</p>
+                            <p class="text-lg font-bold text-orange-700" id="debt-to-pay">₹0</p>
+                        </div>
+                        <div class="bg-teal-50 p-3 rounded-xl border border-teal-100">
+                            <p class="text-[10px] text-teal-600 font-bold uppercase mb-1">To Receive (Assets)</p>
+                            <p class="text-lg font-bold text-teal-700" id="debt-to-receive">₹0</p>
+                        </div>
+                    </div>
+                    <div id="debt-people-list" class="space-y-3 bg-white rounded-xl shadow-sm border border-gray-100 p-3">
+                        <p class="text-xs text-gray-500 text-center">No active debts.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: NOTIFICATIONS -->
+            <section id="view-notifications" class="view-section">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Notifications</h2>
+                    <button onclick="window.db.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
+                </div>
+                <div id="notifications-list" class="space-y-3"></div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bg-white border-t border-gray-200 fixed bottom-0 w-full z-40 px-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="flex justify-around items-center h-16 max-w-md mx-auto relative">
+                <button onclick="window.app.switchTab('home')" class="nav-btn active flex flex-col items-center p-2 text-primary w-14 transition-colors" data-target="home">
+                    <i class="fa-solid fa-house text-lg mb-1"></i><span class="text-[9px] font-bold uppercase tracking-wider">Home</span>
+                </button>
+                <button onclick="window.app.switchTab('transactions')" class="nav-btn flex flex-col items-center p-2 text-gray-400 w-14 transition-colors" data-target="transactions">
+                    <i class="fa-solid fa-list text-lg mb-1"></i><span class="text-[9px] font-bold uppercase tracking-wider">History</span>
+                </button>
+                
+                <!-- FAB Add Button -->
+                <div class="relative -top-6 w-16 flex justify-center">
+                    <button onclick="window.app.switchTab('add')" class="fab-button w-14 h-14 rounded-full text-white bg-primary flex items-center justify-center border-4 border-gray-50 active:scale-95 transition-transform shadow-lg shadow-emerald-200">
+                        <i class="fa-solid fa-plus text-xl"></i>
+                    </button>
+                </div>
+
+                <button onclick="window.app.switchTab('reports')" class="nav-btn flex flex-col items-center p-2 text-gray-400 w-14 transition-colors" data-target="reports">
+                    <i class="fa-solid fa-chart-pie text-lg mb-1"></i><span class="text-[9px] font-bold uppercase tracking-wider">Reports</span>
+                </button>
+                <button onclick="window.app.switchTab('accounts')" class="nav-btn flex flex-col items-center p-2 text-gray-400 w-14 transition-colors" data-target="accounts">
+                    <i class="fa-solid fa-building-columns text-lg mb-1"></i><span class="text-[9px] font-bold uppercase tracking-wider">Vault</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Modal for New Account -->
+    <div id="modal-new-account" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95" id="modal-new-account-content">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">Add Wallet/Bank</h3>
+            <input type="text" id="new-acc-name" placeholder="e.g. Cash, SBI" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5 outline-none focus:border-primary text-sm font-medium">
+            <div class="flex gap-3">
+                <button onclick="window.app.hideModal('modal-new-account')" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
+                <button onclick="window.app.saveNewAccount()" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+            </div>
         </div>
     </div>
 
-    <div id="notice-modal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-box notice-modal-box">
-            <button type="button" class="modal-close-btn" aria-label="Close notice modal" id="close-notice-modal">&times;</button>
-            <h3 id="notice-modal-title" class="modal-title mb-2">Notification</h3>
-            <p id="notice-modal-date" class="notice-date mb-3"></p>
-            <div id="notice-modal-body" class="notice-modal-body"></div>
-        </div>
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full text-sm shadow-lg z-50 transition-opacity duration-300 opacity-0 pointer-events-none flex items-center gap-2">
+        <i class="fa-solid fa-circle-check text-green-400"></i> <span id="toast-msg">Message</span>
     </div>
 
-    <div id="img-modal" class="modal-overlay" onclick="this.style.display='none'">
-        <div class="modal-box"><img id="zoom-img" src=""></div>
-    </div>
-    <script type="module" src="scripts/pages/index-page.js"></script>
+    <!-- PWA Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW Registered'))
+                .catch(err => console.log('SW Registration Failed', err));
+            });
+        }
+    </script>
 </body>
 </html>
