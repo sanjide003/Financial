@@ -1,4 +1,4 @@
-import { auth, provider, signInWithPopup, onAuthStateChanged, signOut } from './firebase-config.js';
+import { auth, provider, signInWithRedirect, onAuthStateChanged, signOut } from './firebase-config.js';
 
 let currentUser = null;
 
@@ -9,7 +9,8 @@ const initAuth = () => {
     loginBtn.addEventListener('click', async () => {
         try {
             loginBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Please wait...';
-            await signInWithPopup(auth, provider);
+            // മൊബൈൽ സപ്പോർട്ടിനായി Popup ന് പകരം Redirect ഉപയോഗിക്കുന്നു
+            await signInWithRedirect(auth, provider);
         } catch (error) {
             console.error("Auth Error", error);
             authError.textContent = error.message;
