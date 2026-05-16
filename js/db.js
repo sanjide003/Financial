@@ -1,4 +1,4 @@
-import { db, collection, addDoc, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from './firebase-config.js';
+import { db, collection, addDoc, getDocs, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from './firebase-config.js';
 
 let activeUnsubscribes = [];
 
@@ -32,6 +32,10 @@ const addRecord = async (collectionName, data) => {
     }
 };
 
+const updateRecord = async (collectionName, docId, data) => {
+    await updateDoc(doc(db, collectionName, docId), data);
+};
+
 const deleteRecord = async (collectionName, docId) => {
     await deleteDoc(doc(db, collectionName, docId));
 };
@@ -46,12 +50,15 @@ const addNotification = async (userId, title, message) => {
     });
 };
 
-const clearNotifications = async () => {
-    // Note: Deleting multiple docs requires querying first. 
-    // For simplicity in UI, we'll implement this later or use a batch delete.
-    window.app.showToast("Clear feature coming soon");
-}
+const clearNotifications = async (userId) => {
+    if (!userId) return;
 
-window.db = { listenToData, addRecord, deleteRecord, addNotification, clearNotifications };
+    const q = query(collection(db, 'notifications'), where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    await Promise.all(snapshot.docs.map((item) => deleteDoc(doc(db, 'notifications', item.id))));
+    window.app.showToast('Notifications cleared');
+};
 
-export { listenToData, addRecord, deleteRecord, addNotification };
+window.db = { listenToData, addRecord, updateRecord, deleteRecord, addNotification, clearNotifications };
+
+export { listenToData, addRecord, updateRecord, deleteRecord, addNotification, clearNotifications };

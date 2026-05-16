@@ -149,7 +149,7 @@
 
             <!-- VIEW: ADD TRANSACTION (Form) -->
             <section id="view-add" class="view-section">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">Add Record</h2>
+                <h2 class="text-xl font-bold text-gray-800 mb-4" id="add-form-title">Add Record</h2>
                 
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                     <div class="grid grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg mb-6">
@@ -245,7 +245,7 @@
                 <div class="mb-8">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-gray-800">Wallets & Banks</h2>
-                        <button onclick="window.app.showModal('modal-new-account')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add New</button>
+                        <button onclick="window.app.resetAccountModal(); window.app.showModal('modal-new-account')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add New</button>
                     </div>
                     <div id="accounts-full-list" class="space-y-3"></div>
                 </div>
@@ -274,7 +274,7 @@
             <section id="view-notifications" class="view-section">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold text-gray-800">Notifications</h2>
-                    <button onclick="window.db.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
+                    <button onclick="window.app.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
                 </div>
                 <div id="notifications-list" class="space-y-3"></div>
             </section>
@@ -310,11 +310,37 @@
     <!-- Modal for New Account -->
     <div id="modal-new-account" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
         <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95" id="modal-new-account-content">
-            <h3 class="text-lg font-bold text-gray-800 mb-4">Add Wallet/Bank</h3>
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="modal-account-title">Add Wallet/Bank</h3>
             <input type="text" id="new-acc-name" placeholder="e.g. Cash, SBI" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5 outline-none focus:border-primary text-sm font-medium">
             <div class="flex gap-3">
-                <button onclick="window.app.hideModal('modal-new-account')" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
-                <button onclick="window.app.saveNewAccount()" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+                <button onclick="window.app.hideModal('modal-new-account'); window.app.resetAccountModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
+                <button onclick="window.app.saveNewAccount()" id="btn-save-account" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal for Debt Detail & Settlement -->
+    <div id="modal-debt-detail" class="app-modal fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800" id="debt-detail-name">Debt Details</h3>
+                    <p class="text-xs font-bold text-orange-600 uppercase tracking-wide" id="debt-detail-balance">₹0</p>
+                </div>
+                <button onclick="window.app.hideModal('modal-debt-detail')" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <input type="hidden" id="debt-detail-person">
+            <div id="debt-detail-list" class="max-h-48 overflow-y-auto border border-gray-100 rounded-xl p-3 mb-4"></div>
+
+            <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4">
+                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Settle Debt</p>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <input type="number" id="debt-settle-amount" min="0.01" step="0.01" class="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Amount">
+                    <select id="debt-settle-account" class="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"></select>
+                </div>
+                <button onclick="window.app.settleDebt()" id="btn-settle-debt" class="w-full py-2.5 rounded-xl bg-primary text-white font-bold text-xs uppercase tracking-wide shadow-md">Settle Debt</button>
             </div>
         </div>
     </div>
