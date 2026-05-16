@@ -4,9 +4,12 @@ let appState = {
     accounts: [],
     transactions: [],
     notifications: [],
+    scheduledEmis: [],
+    activeTxnFilter: 'all',
     editingTransactionId: null,
     editingOriginalType: null,
-    editingAccountId: null
+    editingAccountId: null,
+    editingEmiId: null
 };
 
 const escapeHtml = (value = '') => String(value)
@@ -17,7 +20,26 @@ const escapeHtml = (value = '') => String(value)
     .replaceAll("'", '&#039;');
 
 // --- UI Navigation & Setup ---
+const openAddSheet = () => {
+    if (!appState.editingTransactionId) resetRecordForm();
+    setupAddForm();
+    updateSuggestions();
+    document.getElementById('view-add').classList.add('active');
+};
+
+const closeAddSheet = () => {
+    document.getElementById('view-add').classList.remove('active');
+    resetRecordForm();
+};
+
 const switchTab = (tabId) => {
+    if (tabId === 'add') {
+        openAddSheet();
+        return;
+    }
+
+    closeAllActionMenus();
+    closeAddSheet();
     document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
     document.getElementById(`view-${tabId}`).classList.add('active');
     
@@ -34,11 +56,8 @@ const switchTab = (tabId) => {
 
     // Trigger specific tab renders
     if(tabId === 'reports') renderReports();
-    if(tabId === 'transactions') renderTxnList('all');
-    if(tabId === 'add') {
-        if (!appState.editingTransactionId) resetRecordForm();
-        setupAddForm();
-    }
+    if(tabId === 'transactions') renderTxnList(appState.activeTxnFilter);
+    if(tabId === 'accounts') setVaultTab(appState.vaultTab || 'accounts');
 };
 
 const showToast = (msg) => {
@@ -51,6 +70,14 @@ const showToast = (msg) => {
 // --- Data Fetching & Core Logic ---
 const initAfterAuth = (user) => {
     appState.user = user;
+    if (window.db.upsertUser) {
+        window.db.upsertUser(user.uid, {
+            name: user.displayName || '',
+            email: user.email || '',
+            photoURL: user.photoURL || '',
+            lastLoginAt: new Date().toISOString()
+        }).catch((error) => console.error('Error saving user profile', error));
+    }
     
     // Listen to Accounts
     window.db.listenToData(user.uid, 'accounts', (data) => {
@@ -63,13 +90,23 @@ const initAfterAuth = (user) => {
         // Sort data locally by date descending
         appState.transactions = data.sort((a, b) => new Date(b.date) - new Date(a.date));
         updateDashboard();
-        if(document.getElementById('view-transactions').classList.contains('active')) renderTxnList('all');
+        populateTransactionFilters();
+        updateSuggestions();
+        if(document.getElementById('view-transactions').classList.contains('active')) renderTxnList(appState.activeTxnFilter);
+    });
+
+    // Listen to scheduled EMIs and bills
+    window.db.listenToData(user.uid, 'scheduled_emis', (data) => {
+        appState.scheduledEmis = data.sort((a, b) => Number(a.dueDay || 0) - Number(b.dueDay || 0));
+        updateDashboard();
+        renderEmis();
     });
 
     // Listen to Notifications
     window.db.listenToData(user.uid, 'notifications', (data) => {
         appState.notifications = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         updateNotificationsUI();
+        updateDashboard();
     });
 
     // Setup initial dates
@@ -87,7 +124,10 @@ const initAfterAuth = (user) => {
 // --- UI Updaters ---
 const updateAccountsUI = () => {
     setupAddForm();
+    populateTransactionFilters();
+    updateSuggestions();
     updateDashboard();
+    renderEmis();
 };
 
 const updateDashboard = () => {
@@ -118,10 +158,13 @@ const updateDashboard = () => {
                     <div class="w-10 h-10 rounded-full bg-blue-50 text-secondary flex items-center justify-center"><i class="fa-solid fa-building-columns"></i></div>
                     <span class="font-semibold text-gray-800">${escapeHtml(acc.name)}</span>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 relative">
                     <span class="font-bold text-lg text-gray-800">₹${acc.balance.toFixed(2)}</span>
-                    <button onclick="window.app.editAccount('${accId}')" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600" title="Edit account"><i class="fa-solid fa-pen text-xs"></i></button>
-                    <button onclick="window.app.deleteAccount('${accId}')" class="w-8 h-8 rounded-full bg-red-50 text-red-600" title="Delete account"><i class="fa-solid fa-trash text-xs"></i></button>
+                    <button onclick="window.app.toggleActionMenu('account', '${accId}')" class="w-8 h-8 rounded-full bg-gray-50 text-gray-600" title="More account actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                    <div id="menu-account-${accId}" class="action-menu hidden absolute right-0 top-9 bg-white border border-gray-100 rounded-xl shadow-lg z-20 overflow-hidden text-left">
+                        <button onclick="window.app.editAccount('${accId}')" class="block w-full px-4 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50">Edit</button>
+                        <button onclick="window.app.deleteAccount('${accId}')" class="block w-full px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50">Delete</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -152,18 +195,52 @@ const updateDashboard = () => {
     }
     if(!hasDebts) peopleList.innerHTML = '<p class="text-xs text-gray-500 text-center">No active debts.</p>';
 
+    renderActionCenter(stats);
+
     // Render Recent Txns
     renderTxnList('recent', 'home-recent-txns', 4);
+};
+
+const transactionMatchesType = (transaction, filter) => {
+    if (filter === 'all' || filter === 'recent') return true;
+    if (filter === 'debt') return ['loan_given', 'loan_taken', 'debt_received', 'debt_paid'].includes(transaction.type);
+    return transaction.type.includes(filter);
+};
+
+const transactionMatchesAccount = (transaction, accountId) => {
+    if (accountId === 'all') return true;
+    return transaction.from_account === accountId || transaction.to_account === accountId;
+};
+
+const getTransactionSearchText = (transaction) => [
+    transaction.category,
+    transaction.note,
+    transaction.type,
+    appState.accounts.find((account) => account.id === transaction.from_account)?.name,
+    appState.accounts.find((account) => account.id === transaction.to_account)?.name
+].filter(Boolean).join(' ').toLowerCase();
+
+const getFilteredTransactions = (filter = appState.activeTxnFilter) => {
+    let filtered = appState.transactions.filter((transaction) => transactionMatchesType(transaction, filter));
+
+    if (filter !== 'recent') {
+        const month = document.getElementById('filter-month')?.value || 'all';
+        const accountId = document.getElementById('filter-account')?.value || 'all';
+        const search = (document.getElementById('txn-search')?.value || '').trim().toLowerCase();
+
+        if (month !== 'all') filtered = filtered.filter((transaction) => transaction.date?.startsWith(month));
+        if (accountId !== 'all') filtered = filtered.filter((transaction) => transactionMatchesAccount(transaction, accountId));
+        if (search) filtered = filtered.filter((transaction) => getTransactionSearchText(transaction).includes(search));
+    }
+
+    return filtered;
 };
 
 const renderTxnList = (filter = 'all', containerId = 'full-txn-list', limit = null) => {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
     
-    let filtered = appState.transactions;
-    if(filter !== 'all' && filter !== 'recent') {
-        filtered = filtered.filter(t => filter === 'debt' ? ['loan_given', 'loan_taken', 'debt_received', 'debt_paid'].includes(t.type) : t.type.includes(filter));
-    }
+    let filtered = containerId === 'full-txn-list' ? getFilteredTransactions(filter) : appState.transactions.filter((transaction) => transactionMatchesType(transaction, filter));
     if(limit) filtered = filtered.slice(0, limit);
 
     if(filtered.length === 0) {
@@ -182,7 +259,6 @@ const renderTxnList = (filter = 'all', containerId = 'full-txn-list', limit = nu
         else if(t.type === 'transfer') { icon = 'fa-right-left'; colorClass = 'bg-blue-100 text-blue-600'; }
         else if(['loan_given', 'loan_taken', 'debt_received', 'debt_paid'].includes(t.type)) { icon = 'fa-handshake'; colorClass = 'bg-orange-100 text-orange-600'; }
 
-        // Formatting date
         const dateObj = new Date(t.date);
         const day = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
@@ -196,26 +272,45 @@ const renderTxnList = (filter = 'all', containerId = 'full-txn-list', limit = nu
 
         container.innerHTML += `
             <div class="flex items-center justify-between p-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 rounded-full flex items-center justify-center ${colorClass}">
                         <i class="fa-solid ${icon}"></i>
                     </div>
-                    <div>
-                        <p class="text-sm font-bold text-gray-800">${escapeHtml(t.category)}</p>
-                        <p class="text-[10px] text-gray-400 font-medium">${day} • ${escapeHtml(subtext)}</p>
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-gray-800 truncate">${escapeHtml(t.category)}</p>
+                        <p class="text-[10px] text-gray-400 font-medium truncate">${day} • ${escapeHtml(subtext)}${t.note ? ` • ${escapeHtml(t.note)}` : ''}</p>
                     </div>
                 </div>
-                <div class="text-right">
+                <div class="text-right flex items-center gap-2 shrink-0 relative">
                     <p class="text-sm font-bold ${signClass}">${amountPrefix}₹${parseFloat(t.amount).toFixed(2)}</p>
-                    ${showActions ? `<div class="flex justify-end gap-1 mt-1">
-                        <button onclick="window.app.editTransaction('${t.id}')" class="text-[10px] font-bold text-blue-600 px-2 py-1 rounded bg-blue-50">Edit</button>
-                        <button onclick="window.app.deleteTransaction('${t.id}')" class="text-[10px] font-bold text-red-600 px-2 py-1 rounded bg-red-50">Delete</button>
+                    ${showActions ? `<button onclick="window.app.toggleActionMenu('txn', '${t.id}')" class="w-8 h-8 rounded-full bg-gray-50 text-gray-600" title="More transaction actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                    <div id="menu-txn-${t.id}" class="action-menu hidden absolute right-0 top-9 bg-white border border-gray-100 rounded-xl shadow-lg z-20 overflow-hidden text-left">
+                        <button onclick="window.app.editTransaction('${t.id}')" class="block w-full px-4 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50">Edit</button>
+                        <button onclick="window.app.deleteTransaction('${t.id}')" class="block w-full px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50">Delete</button>
                     </div>` : ''}
                 </div>
             </div>
         `;
     });
 };
+
+const populateTransactionFilters = () => {
+    const monthSelect = document.getElementById('filter-month');
+    const accountSelect = document.getElementById('filter-account');
+    if (!monthSelect || !accountSelect) return;
+
+    const selectedMonth = monthSelect.value || 'all';
+    const selectedAccount = accountSelect.value || 'all';
+    const months = [...new Set(appState.transactions.map((transaction) => transaction.date?.slice(0, 7)).filter(Boolean))].sort().reverse();
+
+    monthSelect.innerHTML = '<option value="all">All Time</option>' + months.map((month) => `<option value="${month}">${month}</option>`).join('');
+    accountSelect.innerHTML = '<option value="all">All Accounts</option>' + appState.accounts.map((account) => `<option value="${account.id}">${escapeHtml(account.name)}</option>`).join('');
+
+    monthSelect.value = months.includes(selectedMonth) ? selectedMonth : 'all';
+    accountSelect.value = appState.accounts.some((account) => account.id === selectedAccount) ? selectedAccount : 'all';
+};
+
+const applyTxnFilters = () => renderTxnList(appState.activeTxnFilter);
 
 // --- Form & Input Handling ---
 const setupAddForm = () => {
@@ -225,6 +320,9 @@ const setupAddForm = () => {
     const options = appState.accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
     fromSelect.innerHTML = options;
     toSelect.innerHTML = options;
+
+    const emiAccount = document.getElementById('emi-account');
+    if (emiAccount) emiAccount.innerHTML = options;
 };
 
 const setAddType = (type) => {
@@ -272,6 +370,8 @@ const setAddType = (type) => {
     } else {
         labelCat.innerText = 'Expense Category';
     }
+
+    updateSuggestions();
 };
 
 
@@ -591,6 +691,274 @@ const clearNotifications = async () => {
     await window.db.clearNotifications(appState.user.uid);
 };
 
+
+const closeAllActionMenus = () => {
+    document.querySelectorAll('.action-menu').forEach((menu) => menu.classList.add('hidden'));
+};
+
+const toggleActionMenu = (kind, id) => {
+    const menuId = `menu-${kind}-${id}`;
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    const wasHidden = menu.classList.contains('hidden');
+    closeAllActionMenus();
+    if (wasHidden) menu.classList.remove('hidden');
+};
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('.action-menu') && !event.target.closest('[title^="More"]')) {
+        closeAllActionMenus();
+    }
+});
+
+const getCurrentMonthKey = () => new Date().toISOString().slice(0, 7);
+
+const getEmiDueDate = (emi) => {
+    const now = new Date();
+    const dueDay = Math.min(Math.max(Number(emi.dueDay || 1), 1), 31);
+    const dueDate = new Date(now.getFullYear(), now.getMonth(), dueDay);
+    if (dueDate.getMonth() !== now.getMonth()) dueDate.setDate(0);
+    return dueDate;
+};
+
+const getPendingEmis = () => {
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now);
+    sevenDaysFromNow.setDate(now.getDate() + 7);
+    const currentMonth = getCurrentMonthKey();
+
+    return appState.scheduledEmis.filter((emi) => {
+        if (emi.active === false || emi.lastPaidMonth === currentMonth) return false;
+        const dueDate = getEmiDueDate(emi);
+        return dueDate <= sevenDaysFromNow;
+    });
+};
+
+const renderActionCenter = (stats) => {
+    const wrapper = document.getElementById('home-alerts');
+    const list = document.getElementById('home-alerts-list');
+    if (!wrapper || !list) return;
+
+    const pendingEmis = getPendingEmis();
+    const debtAlerts = Object.entries(stats.debts.people)
+        .filter(([, amount]) => Math.abs(amount) >= 0.01)
+        .slice(0, 3);
+
+    list.innerHTML = '';
+
+    pendingEmis.forEach((emi) => {
+        const dueDate = getEmiDueDate(emi);
+        const accountName = appState.accounts.find((account) => account.id === emi.accountId)?.name || 'Account';
+        list.innerHTML += `
+            <div class="bg-red-50 border border-red-100 rounded-xl p-3 flex justify-between items-center gap-3">
+                <div>
+                    <p class="text-sm font-bold text-red-700">${escapeHtml(emi.name)}</p>
+                    <p class="text-[10px] text-red-500 font-semibold">Due ${dueDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} • ${escapeHtml(accountName)}</p>
+                </div>
+                <button onclick="window.app.markEmiPaid('${emi.id}')" class="bg-red-600 text-white rounded-lg px-3 py-2 text-[10px] font-bold uppercase">Pay ₹${parseFloat(emi.amount).toFixed(0)}</button>
+            </div>
+        `;
+    });
+
+    debtAlerts.forEach(([person, amount]) => {
+        const encoded = encodeURIComponent(person);
+        list.innerHTML += `
+            <div class="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center gap-3">
+                <div>
+                    <p class="text-sm font-bold text-orange-700">${escapeHtml(person)}</p>
+                    <p class="text-[10px] text-orange-500 font-semibold">${amount > 0 ? 'Receivable' : 'Payable'} debt pending</p>
+                </div>
+                <button onclick="window.app.showDebtDetails(decodeURIComponent('${encoded}'))" class="bg-orange-600 text-white rounded-lg px-3 py-2 text-[10px] font-bold uppercase">Open</button>
+            </div>
+        `;
+    });
+
+    wrapper.classList.toggle('hidden', !pendingEmis.length && !debtAlerts.length);
+};
+
+const setVaultTab = (tab) => {
+    appState.vaultTab = tab;
+    ['accounts', 'debts', 'emis'].forEach((item) => {
+        document.getElementById(`vault-${item}-panel`)?.classList.toggle('hidden', item !== tab);
+        const btn = document.getElementById(`btn-vault-${item}`);
+        if (!btn) return;
+        btn.className = item === tab
+            ? 'vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary'
+            : 'vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500';
+    });
+};
+
+const defaultSuggestions = {
+    expense: ['Food', 'Groceries', 'Rent', 'Travel', 'Fuel', 'Shopping', 'Medical', 'EMI', 'Bills'],
+    income: ['Salary', 'Business', 'Rent', 'Interest', 'Gift'],
+    debt: ['Loan Given', 'Loan Taken'],
+    transfer: ['Transfer']
+};
+
+const updateSuggestions = () => {
+    const categoryList = document.getElementById('category-suggestions');
+    const noteList = document.getElementById('note-suggestions');
+    if (!categoryList || !noteList) return;
+
+    const type = document.getElementById('form-type')?.value || 'expense';
+    const transactionTypes = type === 'debt' ? ['loan_given', 'loan_taken', 'debt_received', 'debt_paid'] : [type];
+    const historicalCategories = appState.transactions
+        .filter((transaction) => transactionTypes.includes(transaction.type))
+        .map((transaction) => transaction.category)
+        .filter(Boolean);
+    const categories = [...new Set([...(defaultSuggestions[type] || []), ...historicalCategories])];
+    const notes = [...new Set(appState.transactions.map((transaction) => transaction.note).filter(Boolean))];
+
+    categoryList.innerHTML = categories.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+    noteList.innerHTML = notes.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+};
+
+const resetEmiModal = () => {
+    appState.editingEmiId = null;
+    document.getElementById('emi-id').value = '';
+    document.getElementById('emi-name').value = '';
+    document.getElementById('emi-amount').value = '';
+    document.getElementById('emi-due-day').value = '';
+    document.getElementById('emi-category').value = 'EMI';
+    document.getElementById('modal-emi-title').innerText = 'Add EMI/Bill';
+    document.getElementById('btn-save-emi').innerText = 'Save';
+    setupAddForm();
+};
+
+const renderEmis = () => {
+    const list = document.getElementById('emi-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (!appState.scheduledEmis.length) {
+        list.innerHTML = '<p class="text-xs text-gray-500 text-center bg-white rounded-xl border border-gray-100 p-4">No EMIs or bills added.</p>';
+        return;
+    }
+
+    appState.scheduledEmis.forEach((emi) => {
+        const accountName = appState.accounts.find((account) => account.id === emi.accountId)?.name || 'Unknown';
+        const statusText = emi.lastPaidMonth === getCurrentMonthKey() ? 'Paid this month' : `Due day ${emi.dueDay}`;
+        list.innerHTML += `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+                <div>
+                    <p class="text-sm font-bold text-gray-800">${escapeHtml(emi.name)}</p>
+                    <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(accountName)} • ${escapeHtml(statusText)}</p>
+                    <p class="text-sm font-bold text-red-600 mt-1">₹${parseFloat(emi.amount).toFixed(2)}</p>
+                </div>
+                <div class="relative">
+                    <button onclick="window.app.toggleActionMenu('emi', '${emi.id}')" class="w-8 h-8 rounded-full bg-gray-50 text-gray-600" title="More EMI actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                    <div id="menu-emi-${emi.id}" class="action-menu hidden absolute right-0 top-9 bg-white border border-gray-100 rounded-xl shadow-lg z-20 overflow-hidden text-left">
+                        <button onclick="window.app.markEmiPaid('${emi.id}')" class="block w-full px-4 py-2 text-xs font-bold text-green-600 hover:bg-green-50">Mark paid</button>
+                        <button onclick="window.app.editEmi('${emi.id}')" class="block w-full px-4 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50">Edit</button>
+                        <button onclick="window.app.deleteEmi('${emi.id}')" class="block w-full px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+};
+
+const saveEmi = async () => {
+    const name = document.getElementById('emi-name').value.trim();
+    const amount = parseFloat(document.getElementById('emi-amount').value);
+    const dueDay = parseInt(document.getElementById('emi-due-day').value, 10);
+    const accountId = document.getElementById('emi-account').value;
+    const category = document.getElementById('emi-category').value.trim() || 'EMI';
+
+    if (!name) return alert('Enter EMI/Bill name');
+    if (!amount || amount <= 0) return alert('Enter a valid EMI amount');
+    if (!dueDay || dueDay < 1 || dueDay > 31) return alert('Due day must be between 1 and 31');
+    if (!accountId) return alert('Select payment account');
+
+    const data = {
+        userId: appState.user.uid,
+        name,
+        amount,
+        dueDay,
+        accountId,
+        category,
+        active: true,
+        updatedAt: new Date().toISOString()
+    };
+
+    try {
+        if (appState.editingEmiId) {
+            await window.db.updateRecord('scheduled_emis', appState.editingEmiId, data);
+            showToast('EMI/Bill updated');
+        } else {
+            await window.db.addRecord('scheduled_emis', { ...data, createdAt: new Date().toISOString() });
+            showToast('EMI/Bill added');
+        }
+        hideModal('modal-emi');
+        resetEmiModal();
+    } catch (error) {
+        console.error(error);
+        alert('Error saving EMI/Bill');
+    }
+};
+
+const editEmi = (emiId) => {
+    const emi = appState.scheduledEmis.find((item) => item.id === emiId);
+    if (!emi) return showToast('EMI not found');
+
+    appState.editingEmiId = emiId;
+    setupAddForm();
+    document.getElementById('emi-id').value = emi.id;
+    document.getElementById('emi-name').value = emi.name || '';
+    document.getElementById('emi-amount').value = emi.amount || '';
+    document.getElementById('emi-due-day').value = emi.dueDay || '';
+    document.getElementById('emi-account').value = emi.accountId || '';
+    document.getElementById('emi-category').value = emi.category || 'EMI';
+    document.getElementById('modal-emi-title').innerText = 'Edit EMI/Bill';
+    document.getElementById('btn-save-emi').innerText = 'Update';
+    showModal('modal-emi');
+};
+
+const deleteEmi = async (emiId) => {
+    const emi = appState.scheduledEmis.find((item) => item.id === emiId);
+    if (!emi) return showToast('EMI not found');
+    if (!confirm(`Delete ${emi.name}?`)) return;
+
+    try {
+        await window.db.deleteRecord('scheduled_emis', emiId);
+        showToast('EMI/Bill deleted');
+    } catch (error) {
+        console.error(error);
+        alert('Error deleting EMI/Bill');
+    }
+};
+
+const markEmiPaid = async (emiId) => {
+    const emi = appState.scheduledEmis.find((item) => item.id === emiId);
+    if (!emi) return showToast('EMI not found');
+
+    const currentMonth = getCurrentMonthKey();
+    if (emi.lastPaidMonth === currentMonth && !confirm('This EMI is already marked paid this month. Add another payment?')) return;
+
+    try {
+        await window.db.addRecord('transactions', {
+            userId: appState.user.uid,
+            type: 'expense',
+            amount: parseFloat(emi.amount),
+            category: emi.category || emi.name,
+            from_account: emi.accountId,
+            date: new Date().toISOString().slice(0, 10),
+            note: `${emi.name} paid`,
+            emiId,
+            timestamp: new Date().toISOString()
+        });
+        await window.db.updateRecord('scheduled_emis', emiId, {
+            lastPaidMonth: currentMonth,
+            lastPaidAt: new Date().toISOString()
+        });
+        await window.db.addNotification(appState.user.uid, 'EMI Paid', `${emi.name} marked as paid for ${currentMonth}.`);
+        showToast('EMI marked as paid');
+    } catch (error) {
+        console.error(error);
+        alert('Error marking EMI paid');
+    }
+};
+
 // --- Notifications ---
 const updateNotificationsUI = () => {
     const unreadCount = appState.notifications.filter(n => !n.read).length;
@@ -614,13 +982,25 @@ const updateNotificationsUI = () => {
     appState.notifications.forEach(n => {
         const date = new Date(n.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
         list.innerHTML += `
-            <div class="bg-white p-3 rounded-xl border ${n.read ? 'border-gray-100' : 'border-blue-200 bg-blue-50'} shadow-sm">
+            <div onclick="window.app.markNotificationRead('${n.id}')" class="bg-white p-3 rounded-xl border ${n.read ? 'border-gray-100' : 'border-blue-200 bg-blue-50'} shadow-sm cursor-pointer">
                 <p class="text-sm font-bold text-gray-800">${escapeHtml(n.title)}</p>
                 <p class="text-xs text-gray-600 mt-1">${escapeHtml(n.message)}</p>
                 <p class="text-[9px] text-gray-400 mt-2">${date}</p>
             </div>
         `;
     });
+};
+
+
+const markNotificationRead = async (notificationId) => {
+    const notification = appState.notifications.find((item) => item.id === notificationId);
+    if (!notification || notification.read) return;
+
+    try {
+        await window.db.updateRecord('notifications', notificationId, { read: true, readAt: new Date().toISOString() });
+    } catch (error) {
+        console.error('Error marking notification read', error);
+    }
 };
 
 // Global Exports for HTML inline handlers
@@ -639,14 +1019,26 @@ window.app = {
     resetRecordForm,
     showDebtDetails,
     settleDebt,
-    clearNotifications, 
+    clearNotifications,
+    closeAddSheet,
+    toggleActionMenu,
+    applyTxnFilters,
+    setVaultTab,
+    resetEmiModal,
+    saveEmi,
+    editEmi,
+    deleteEmi,
+    markEmiPaid,
+    markNotificationRead,
     filterTxns: (type) => {
+        appState.activeTxnFilter = type;
         document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('bg-gray-800', 'text-white');
-            btn.classList.add('bg-gray-200', 'text-gray-700');
+            const isActive = btn.textContent.trim().toLowerCase() === type || (type === 'all' && btn.textContent.trim().toLowerCase() === 'all');
+            btn.classList.toggle('bg-gray-800', isActive);
+            btn.classList.toggle('text-white', isActive);
+            btn.classList.toggle('bg-gray-200', !isActive);
+            btn.classList.toggle('text-gray-700', !isActive);
         });
-        event.target.classList.remove('bg-gray-200', 'text-gray-700');
-        event.target.classList.add('bg-gray-800', 'text-white');
         renderTxnList(type);
     },
     showToast

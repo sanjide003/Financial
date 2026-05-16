@@ -1,4 +1,4 @@
-import { db, collection, addDoc, getDocs, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from './firebase-config.js';
+import { db, collection, addDoc, getDocs, query, where, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from './firebase-config.js';
 
 let activeUnsubscribes = [];
 
@@ -32,6 +32,10 @@ const addRecord = async (collectionName, data) => {
     }
 };
 
+const upsertUser = async (userId, data) => {
+    await setDoc(doc(db, 'users', userId), data, { merge: true });
+};
+
 const updateRecord = async (collectionName, docId, data) => {
     await updateDoc(doc(db, collectionName, docId), data);
 };
@@ -59,6 +63,6 @@ const clearNotifications = async (userId) => {
     window.app.showToast('Notifications cleared');
 };
 
-window.db = { listenToData, addRecord, updateRecord, deleteRecord, addNotification, clearNotifications };
+window.db = { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
 
-export { listenToData, addRecord, updateRecord, deleteRecord, addNotification, clearNotifications };
+export { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };

@@ -39,3 +39,40 @@
 #modal-new-account:not(.hidden) > div {
     transform: scale(1);
 }
+
+/* Add transaction bottom sheet */
+.bottom-sheet-view.active {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: flex-end;
+    animation: none;
+}
+.bottom-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.55);
+    backdrop-filter: blur(3px);
+}
+.bottom-sheet-panel {
+    position: relative;
+    width: 100%;
+    max-width: 28rem;
+    max-height: 92vh;
+    overflow-y: auto;
+    margin: 0 auto;
+    animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.action-menu {
+    min-width: 8rem;
+}
+.action-menu.hidden {
+    display: none;
+}

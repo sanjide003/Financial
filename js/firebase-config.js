@@ -10,7 +10,7 @@ import {
   signInWithRedirect,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBV4HUwNtskbvCdhpQNTA4Wvk8oEPyhJlY",
@@ -47,6 +47,7 @@ export {
   orderBy,
   onSnapshot,
   doc,
+  setDoc,
   updateDoc,
   deleteDoc
 };
