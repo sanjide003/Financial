@@ -48,6 +48,24 @@ const processTransactions = (transactions, accounts) => {
             if(!debts.people[t.category]) debts.people[t.category] = 0;
             debts.people[t.category] -= amount; // negative means we owe them
         }
+        else if (t.type === 'debt_received') {
+            // Repayment received from someone you had lent to
+            if(accBalances[t.to_account]) accBalances[t.to_account].balance += amount;
+            netWorth += amount;
+
+            debts.toReceive -= amount;
+            if(!debts.people[t.category]) debts.people[t.category] = 0;
+            debts.people[t.category] -= amount;
+        }
+        else if (t.type === 'debt_paid') {
+            // Repayment paid to someone you borrowed from
+            if(accBalances[t.from_account]) accBalances[t.from_account].balance -= amount;
+            netWorth -= amount;
+
+            debts.toPay -= amount;
+            if(!debts.people[t.category]) debts.people[t.category] = 0;
+            debts.people[t.category] += amount;
+        }
     });
 
     return { netWorth, currentMonthIncome, currentMonthExpense, accBalances, debts };
