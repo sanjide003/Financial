@@ -233,6 +233,31 @@
                             </div>
                         </div>
 
+                        <div class="mb-4 hidden" id="wrap-debt-contact">
+                            <label class="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">Contact & Reminder</label>
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <input type="tel" id="form-debt-phone" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Phone number">
+                                <input type="tel" id="form-debt-whatsapp" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="WhatsApp number">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Due / Return Date</label>
+                                    <input type="date" id="form-debt-due-date" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Alert Before</label>
+                                    <select id="form-debt-reminder-days" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary">
+                                        <option value="0">On due date</option>
+                                        <option value="1">1 day before</option>
+                                        <option value="3" selected>3 days before</option>
+                                        <option value="7">7 days before</option>
+                                        <option value="15">15 days before</option>
+                                        <option value="30">30 days before</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-4 mb-6">
                             <div>
                                 <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Date</label>
@@ -424,6 +449,7 @@
             </div>
 
             <input type="hidden" id="debt-detail-person">
+            <div id="debt-contact-card" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4"></div>
             <div id="debt-detail-list" class="max-h-48 overflow-y-auto border border-gray-100 rounded-xl p-3 mb-4"></div>
 
             <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4">

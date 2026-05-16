@@ -5,6 +5,7 @@ let appState = {
     transactions: [],
     notifications: [],
     scheduledEmis: [],
+    generatedDebtReminderKeys: new Set(),
     activeTxnFilter: 'all',
     editingTransactionId: null,
     editingOriginalType: null,
@@ -215,6 +216,9 @@ const transactionMatchesAccount = (transaction, accountId) => {
 const getTransactionSearchText = (transaction) => [
     transaction.category,
     transaction.note,
+    transaction.phone,
+    transaction.whatsapp,
+    transaction.dueDate,
     transaction.type,
     appState.accounts.find((account) => account.id === transaction.from_account)?.name,
     appState.accounts.find((account) => account.id === transaction.to_account)?.name
@@ -349,12 +353,14 @@ const setAddType = (type) => {
     const wrapTo = document.getElementById('wrap-to-account');
     const wrapCat = document.getElementById('wrap-category');
     const wrapDebt = document.getElementById('wrap-debt-type');
+    const wrapDebtContact = document.getElementById('wrap-debt-contact');
     const labelCat = document.getElementById('label-category');
 
     wrapFrom.classList.remove('hidden');
     wrapTo.classList.add('hidden');
     wrapCat.classList.remove('hidden');
     wrapDebt.classList.add('hidden');
+    wrapDebtContact.classList.add('hidden');
 
     if(type === 'income') {
         wrapFrom.classList.add('hidden');
@@ -366,6 +372,7 @@ const setAddType = (type) => {
         document.getElementById('form-category').value = 'Transfer';
     } else if(type === 'debt') {
         wrapDebt.classList.remove('hidden');
+        wrapDebtContact.classList.remove('hidden');
         labelCat.innerText = "Person's Name";
     } else {
         labelCat.innerText = 'Expense Category';
@@ -415,6 +422,10 @@ const editTransaction = (transactionId) => {
     if (transaction.to_account) document.getElementById('form-to-account').value = transaction.to_account;
     if (['loan_given', 'loan_taken'].includes(transaction.type)) {
         document.querySelector(`input[name="debt_direction"][value="${transaction.type}"]`).checked = true;
+        document.getElementById('form-debt-phone').value = transaction.phone || '';
+        document.getElementById('form-debt-whatsapp').value = transaction.whatsapp || '';
+        document.getElementById('form-debt-due-date').value = transaction.dueDate || '';
+        document.getElementById('form-debt-reminder-days').value = String(transaction.reminderDays ?? 3);
     }
 };
 
@@ -464,6 +475,12 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
     }
     if(rawType === 'income' || rawType === 'transfer' || finalType === 'loan_taken' || finalType === 'debt_received') {
         data.to_account = document.getElementById('form-to-account').value;
+    }
+    if (rawType === 'debt') {
+        data.phone = document.getElementById('form-debt-phone').value.trim();
+        data.whatsapp = document.getElementById('form-debt-whatsapp').value.trim();
+        data.dueDate = document.getElementById('form-debt-due-date').value;
+        data.reminderDays = parseInt(document.getElementById('form-debt-reminder-days').value, 10) || 0;
     }
 
     try {
@@ -614,11 +631,70 @@ const getDebtBalanceForPerson = (person) => {
     return stats.debts.people[person] || 0;
 };
 
+
+const isDebtType = (type) => ['loan_given', 'loan_taken', 'debt_received', 'debt_paid'].includes(type);
+
+const normalizePhoneNumber = (value = '') => value.replace(/[^\d+]/g, '');
+
+const getWhatsAppLink = (value = '') => {
+    const cleaned = normalizePhoneNumber(value).replace(/^\+/, '');
+    return cleaned ? `https://wa.me/${cleaned}` : '';
+};
+
+const getPrimaryDebtContact = (history = []) => history.find((item) => item.phone || item.whatsapp || item.dueDate || item.reminderDays !== undefined) || {};
+
+const getOpenDebtTransactions = () => {
+    const stats = window.calc.processTransactions(appState.transactions, appState.accounts);
+    return appState.transactions.filter((transaction) => {
+        if (!['loan_given', 'loan_taken'].includes(transaction.type) || !transaction.dueDate) return false;
+        return Math.abs(stats.debts.people[transaction.category] || 0) >= 0.01;
+    });
+};
+
+const getDueDebtAlerts = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return getOpenDebtTransactions().filter((transaction) => {
+        const dueDate = new Date(`${transaction.dueDate}T00:00:00`);
+        if (Number.isNaN(dueDate.getTime())) return false;
+        const reminderStart = new Date(dueDate);
+        reminderStart.setDate(dueDate.getDate() - (parseInt(transaction.reminderDays, 10) || 0));
+        return today >= reminderStart;
+    });
+};
+
+const ensureDebtReminderNotifications = async (debtAlerts = []) => {
+    if (!appState.user || !window.db?.addNotification) return;
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    for (const debt of debtAlerts) {
+        const key = `debt-reminder:${debt.id}:${todayKey}`;
+        if (appState.generatedDebtReminderKeys.has(key)) continue;
+        const alreadyExists = appState.notifications.some((notification) => notification.reminderKey === key || notification.message?.includes(key));
+        if (alreadyExists) {
+            appState.generatedDebtReminderKeys.add(key);
+            continue;
+        }
+
+        appState.generatedDebtReminderKeys.add(key);
+        await window.db.addNotification(
+            appState.user.uid,
+            'Debt Reminder',
+            `${debt.category} debt due date: ${debt.dueDate}.`,
+            { reminderKey: key, transactionId: debt.id, dueDate: debt.dueDate, type: 'debt_reminder' }
+        );
+    }
+};
+
 const showDebtDetails = (person) => {
     const balance = getDebtBalanceForPerson(person);
-    const history = appState.transactions.filter((item) => item.category === person && ['loan_given', 'loan_taken', 'debt_received', 'debt_paid'].includes(item.type));
+    const history = appState.transactions.filter((item) => item.category === person && isDebtType(item.type));
+    const contact = getPrimaryDebtContact(history);
     const list = document.getElementById('debt-detail-list');
+    const contactCard = document.getElementById('debt-contact-card');
     list.innerHTML = '';
+    contactCard.innerHTML = '';
 
     document.getElementById('debt-detail-name').innerText = person;
     document.getElementById('debt-detail-balance').innerText = `${balance >= 0 ? 'To Receive' : 'To Pay'}: ₹${Math.abs(balance).toFixed(2)}`;
@@ -626,6 +702,25 @@ const showDebtDetails = (person) => {
     document.getElementById('debt-settle-amount').value = Math.abs(balance).toFixed(2);
     document.getElementById('debt-settle-account').innerHTML = appState.accounts.map((account) => `<option value="${account.id}">${escapeHtml(account.name)}</option>`).join('');
     document.getElementById('btn-settle-debt').classList.toggle('hidden', Math.abs(balance) < 0.01);
+
+    const phone = normalizePhoneNumber(contact.phone || '');
+    const whatsappLink = getWhatsAppLink(contact.whatsapp || contact.phone || '');
+    const hasContactInfo = phone || whatsappLink || contact.dueDate;
+    contactCard.classList.toggle('hidden', !hasContactInfo);
+    if (hasContactInfo) {
+        contactCard.innerHTML = `
+            <div class="space-y-2">
+                <div>
+                    <p class="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Contact & Reminder</p>
+                    <p class="text-xs text-gray-600">${contact.dueDate ? `Due: ${escapeHtml(contact.dueDate)} • Alert ${parseInt(contact.reminderDays, 10) || 0} day(s) before` : 'No due date set'}</p>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    ${phone ? `<a href="tel:${phone}" class="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold"><i class="fa-solid fa-phone"></i> Call</a>` : ''}
+                    ${whatsappLink ? `<a href="${whatsappLink}" target="_blank" rel="noopener" class="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-bold"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>` : ''}
+                </div>
+            </div>
+        `;
+    }
 
     if (history.length === 0) {
         list.innerHTML = '<p class="text-xs text-gray-500 text-center py-3">No debt history.</p>';
@@ -637,11 +732,17 @@ const showDebtDetails = (person) => {
                 debt_received: 'Repayment received',
                 debt_paid: 'Repayment paid'
             };
+            const itemPhone = normalizePhoneNumber(item.phone || '');
+            const itemWhatsapp = getWhatsAppLink(item.whatsapp || item.phone || '');
             list.innerHTML += `
-                <div class="flex justify-between items-center border-b border-gray-100 py-2 last:border-0">
+                <div class="flex justify-between items-start border-b border-gray-100 py-2 last:border-0 gap-3">
                     <div>
                         <p class="text-xs font-bold text-gray-700">${labelMap[item.type]}</p>
-                        <p class="text-[10px] text-gray-400">${item.date}${item.note ? ` • ${escapeHtml(item.note)}` : ''}</p>
+                        <p class="text-[10px] text-gray-400">${item.date}${item.dueDate ? ` • Due ${escapeHtml(item.dueDate)}` : ''}${item.note ? ` • ${escapeHtml(item.note)}` : ''}</p>
+                        ${(itemPhone || itemWhatsapp) ? `<div class="flex gap-2 mt-1">
+                            ${itemPhone ? `<a href="tel:${itemPhone}" class="text-[10px] font-bold text-blue-600">Call</a>` : ''}
+                            ${itemWhatsapp ? `<a href="${itemWhatsapp}" target="_blank" rel="noopener" class="text-[10px] font-bold text-green-600">WhatsApp</a>` : ''}
+                        </div>` : ''}
                     </div>
                     <span class="text-xs font-bold text-gray-800">₹${parseFloat(item.amount).toFixed(2)}</span>
                 </div>
@@ -740,10 +841,12 @@ const renderActionCenter = (stats) => {
     if (!wrapper || !list) return;
 
     const pendingEmis = getPendingEmis();
+    const dueDebtAlerts = getDueDebtAlerts();
     const debtAlerts = Object.entries(stats.debts.people)
         .filter(([, amount]) => Math.abs(amount) >= 0.01)
         .slice(0, 3);
 
+    ensureDebtReminderNotifications(dueDebtAlerts).catch((error) => console.error('Debt reminder notification error', error));
     list.innerHTML = '';
 
     pendingEmis.forEach((emi) => {
@@ -760,7 +863,27 @@ const renderActionCenter = (stats) => {
         `;
     });
 
+    dueDebtAlerts.forEach((debt) => {
+        const encoded = encodeURIComponent(debt.category);
+        const phone = normalizePhoneNumber(debt.phone || '');
+        const whatsappLink = getWhatsAppLink(debt.whatsapp || debt.phone || '');
+        list.innerHTML += `
+            <div class="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center gap-3">
+                <div>
+                    <p class="text-sm font-bold text-orange-700">${escapeHtml(debt.category)}</p>
+                    <p class="text-[10px] text-orange-500 font-semibold">Debt due ${escapeHtml(debt.dueDate)} • Alert ${parseInt(debt.reminderDays, 10) || 0} day(s) before</p>
+                    <div class="flex gap-3 mt-1">
+                        ${phone ? `<a href="tel:${phone}" class="text-[10px] font-bold text-blue-600">Call</a>` : ''}
+                        ${whatsappLink ? `<a href="${whatsappLink}" target="_blank" rel="noopener" class="text-[10px] font-bold text-green-600">WhatsApp</a>` : ''}
+                    </div>
+                </div>
+                <button onclick="window.app.showDebtDetails(decodeURIComponent('${encoded}'))" class="bg-orange-600 text-white rounded-lg px-3 py-2 text-[10px] font-bold uppercase">Open</button>
+            </div>
+        `;
+    });
+
     debtAlerts.forEach(([person, amount]) => {
+        if (dueDebtAlerts.some((debt) => debt.category === person)) return;
         const encoded = encodeURIComponent(person);
         list.innerHTML += `
             <div class="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center gap-3">
@@ -773,7 +896,7 @@ const renderActionCenter = (stats) => {
         `;
     });
 
-    wrapper.classList.toggle('hidden', !pendingEmis.length && !debtAlerts.length);
+    wrapper.classList.toggle('hidden', !pendingEmis.length && !debtAlerts.length && !dueDebtAlerts.length);
 };
 
 const setVaultTab = (tab) => {

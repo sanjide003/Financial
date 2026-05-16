@@ -44,13 +44,14 @@ const deleteRecord = async (collectionName, docId) => {
     await deleteDoc(doc(db, collectionName, docId));
 };
 
-const addNotification = async (userId, title, message) => {
+const addNotification = async (userId, title, message, extraData = {}) => {
     await addRecord("notifications", {
         userId,
         title,
         message,
         timestamp: new Date().toISOString(),
-        read: false
+        read: false,
+        ...extraData
     });
 };
 
