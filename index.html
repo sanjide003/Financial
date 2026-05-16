@@ -67,7 +67,34 @@
                     <i class="fa-regular fa-bell text-gray-600"></i>
                     <span id="unread-badge" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
                 </div>
-                <img id="user-avatar" src="" alt="User" class="w-8 h-8 rounded-full border border-gray-200 cursor-pointer" onclick="window.auth.logout()">
+                <div class="relative">
+                    <button type="button" id="profile-menu-button" onclick="window.auth.toggleProfileMenu()" class="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-full p-1 pr-2 active:scale-[0.98] transition-transform" aria-haspopup="true" aria-expanded="false">
+                        <img id="user-avatar" src="" alt="User" class="w-8 h-8 rounded-full border border-gray-200">
+                        <i class="fa-solid fa-chevron-down text-[10px] text-gray-500"></i>
+                    </button>
+                    <div id="profile-menu" class="profile-menu hidden absolute right-0 top-12 w-64 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-50">
+                        <div class="p-4 bg-gray-50 border-b border-gray-100">
+                            <div class="flex items-center gap-3">
+                                <img id="profile-menu-avatar" src="" alt="User" class="w-11 h-11 rounded-full border border-gray-200">
+                                <div class="min-w-0">
+                                    <p id="profile-menu-name" class="text-sm font-bold text-gray-800 truncate">User</p>
+                                    <p id="profile-menu-email" class="text-[11px] text-gray-500 truncate">email@example.com</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-2">
+                            <button onclick="window.app.switchTab('notifications'); window.auth.closeProfileMenu()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fa-regular fa-bell text-blue-500 w-4"></i> Notifications
+                            </button>
+                            <button id="btn-install-app" onclick="window.auth.installApp()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fa-solid fa-download text-primary w-4"></i> Install FinTrack
+                            </button>
+                            <button onclick="window.auth.logout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50">
+                                <i class="fa-solid fa-right-from-bracket w-4"></i> Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -129,9 +156,18 @@
             <section id="view-transactions" class="view-section">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-gray-800">Transaction History</h2>
-                    <select id="filter-month" class="bg-white border border-gray-200 rounded-lg text-xs px-2 py-1 outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <select id="filter-month" onchange="window.app.applyTxnFilters()" class="bg-white border border-gray-200 rounded-lg text-xs px-2 py-2 outline-none">
                         <option value="all">All Time</option>
                     </select>
+                    <select id="filter-account" onchange="window.app.applyTxnFilters()" class="bg-white border border-gray-200 rounded-lg text-xs px-2 py-2 outline-none">
+                        <option value="all">All Accounts</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <input type="search" id="txn-search" oninput="window.app.applyTxnFilters()" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Search category, person, note...">
                 </div>
                 
                 <div class="flex gap-2 mb-4 overflow-x-auto hide-scrollbar pb-2" id="txn-filters">
@@ -148,10 +184,14 @@
             </section>
 
             <!-- VIEW: ADD TRANSACTION (Form) -->
-            <section id="view-add" class="view-section">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">Add Record</h2>
-                
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <section id="view-add" class="view-section bottom-sheet-view">
+                <div class="bottom-sheet-backdrop" onclick="window.app.closeAddSheet()"></div>
+                <div class="bg-white rounded-t-3xl shadow-2xl border border-gray-100 p-5 bottom-sheet-panel">
+                    <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-4"></div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800" id="add-form-title">Add Record</h2>
+                        <button type="button" onclick="window.app.closeAddSheet()" class="w-9 h-9 rounded-full bg-gray-100 text-gray-500"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
                     <div class="grid grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg mb-6">
                         <button type="button" onclick="window.app.setAddType('expense')" id="btn-type-expense" class="py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-red-600 transition-all">Expense</button>
                         <button type="button" onclick="window.app.setAddType('income')" id="btn-type-income" class="py-2 text-xs font-bold uppercase rounded-md text-gray-500 transition-all">Income</button>
@@ -169,7 +209,8 @@
 
                         <div class="mb-4" id="wrap-category">
                             <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider" id="label-category">Category / Name</label>
-                            <input type="text" id="form-category" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all" placeholder="e.g. Groceries, Salary">
+                            <input type="text" id="form-category" list="category-suggestions" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all" placeholder="e.g. Groceries, Salary">
+                            <datalist id="category-suggestions"></datalist>
                             <!-- Quick categories -->
                             <div id="quick-cats" class="flex gap-2 mt-2 overflow-x-auto pb-1 hidden"></div>
                         </div>
@@ -199,7 +240,8 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Notes</label>
-                                <input type="text" id="form-note" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Optional">
+                                <input type="text" id="form-note" list="note-suggestions" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Optional">
+                                <datalist id="note-suggestions"></datalist>
                             </div>
                         </div>
 
@@ -242,15 +284,21 @@
 
             <!-- VIEW: ACCOUNTS & DEBTS -->
             <section id="view-accounts" class="view-section">
-                <div class="mb-8">
+                <div class="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg mb-5">
+                    <button type="button" onclick="window.app.setVaultTab('accounts')" id="btn-vault-accounts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary">Accounts</button>
+                    <button type="button" onclick="window.app.setVaultTab('debts')" id="btn-vault-debts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Debts</button>
+                    <button type="button" onclick="window.app.setVaultTab('emis')" id="btn-vault-emis" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">EMIs</button>
+                </div>
+
+                <div id="vault-accounts-panel" class="vault-panel mb-8">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-gray-800">Wallets & Banks</h2>
-                        <button onclick="window.app.showModal('modal-new-account')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add New</button>
+                        <button onclick="window.app.resetAccountModal(); window.app.showModal('modal-new-account')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add New</button>
                     </div>
                     <div id="accounts-full-list" class="space-y-3"></div>
                 </div>
 
-                <div>
+                <div id="vault-debts-panel" class="vault-panel hidden">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-gray-800">Debts & Loans</h2>
                     </div>
@@ -268,13 +316,21 @@
                         <p class="text-xs text-gray-500 text-center">No active debts.</p>
                     </div>
                 </div>
+
+                <div id="vault-emis-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">EMIs & Bills</h2>
+                        <button onclick="window.app.resetEmiModal(); window.app.showModal('modal-emi')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add EMI</button>
+                    </div>
+                    <div id="emi-list" class="space-y-3"></div>
+                </div>
             </section>
 
             <!-- VIEW: NOTIFICATIONS -->
             <section id="view-notifications" class="view-section">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold text-gray-800">Notifications</h2>
-                    <button onclick="window.db.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
+                    <button onclick="window.app.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
                 </div>
                 <div id="notifications-list" class="space-y-3"></div>
             </section>
@@ -310,11 +366,73 @@
     <!-- Modal for New Account -->
     <div id="modal-new-account" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
         <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95" id="modal-new-account-content">
-            <h3 class="text-lg font-bold text-gray-800 mb-4">Add Wallet/Bank</h3>
-            <input type="text" id="new-acc-name" placeholder="e.g. Cash, SBI" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5 outline-none focus:border-primary text-sm font-medium">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="modal-account-title">Add Wallet/Bank</h3>
+            <input type="text" id="new-acc-name" list="account-name-suggestions" placeholder="e.g. Cash, SBI" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5 outline-none focus:border-primary text-sm font-medium">
+            <datalist id="account-name-suggestions">
+                <option value="Cash in Hand"></option>
+                <option value="SBI"></option>
+                <option value="HDFC"></option>
+                <option value="Federal Bank"></option>
+                <option value="Credit Card"></option>
+            </datalist>
             <div class="flex gap-3">
-                <button onclick="window.app.hideModal('modal-new-account')" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
-                <button onclick="window.app.saveNewAccount()" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+                <button onclick="window.app.hideModal('modal-new-account'); window.app.resetAccountModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
+                <button onclick="window.app.saveNewAccount()" id="btn-save-account" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal for EMI/Bill Setup -->
+    <div id="modal-emi" class="app-modal fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="modal-emi-title">Add EMI/Bill</h3>
+            <input type="hidden" id="emi-id">
+            <div class="space-y-3">
+                <input type="text" id="emi-name" list="emi-name-suggestions" placeholder="e.g. Home Loan, LIC, Chitty" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium">
+                <datalist id="emi-name-suggestions">
+                    <option value="Home Loan"></option>
+                    <option value="Vehicle Loan"></option>
+                    <option value="LIC Premium"></option>
+                    <option value="Chitty"></option>
+                    <option value="Credit Card Bill"></option>
+                </datalist>
+                <input type="number" id="emi-amount" min="0.01" step="0.01" placeholder="Amount" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="number" id="emi-due-day" min="1" max="31" placeholder="Due day" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium">
+                    <select id="emi-account" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 outline-none focus:border-primary text-sm font-medium"></select>
+                </div>
+                <input type="text" id="emi-category" list="category-suggestions" placeholder="Expense category" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium">
+            </div>
+            <div class="flex gap-3 mt-5">
+                <button onclick="window.app.hideModal('modal-emi'); window.app.resetEmiModal()" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
+                <button onclick="window.app.saveEmi()" id="btn-save-emi" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal for Debt Detail & Settlement -->
+    <div id="modal-debt-detail" class="app-modal fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800" id="debt-detail-name">Debt Details</h3>
+                    <p class="text-xs font-bold text-orange-600 uppercase tracking-wide" id="debt-detail-balance">₹0</p>
+                </div>
+                <button onclick="window.app.hideModal('modal-debt-detail')" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <input type="hidden" id="debt-detail-person">
+            <div id="debt-detail-list" class="max-h-48 overflow-y-auto border border-gray-100 rounded-xl p-3 mb-4"></div>
+
+            <div class="bg-gray-50 border border-gray-100 rounded-xl p-3 mb-4">
+                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Settle Debt</p>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <input type="number" id="debt-settle-amount" min="0.01" step="0.01" class="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Amount">
+                    <select id="debt-settle-account" class="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"></select>
+                </div>
+                <button onclick="window.app.settleDebt()" id="btn-settle-debt" class="w-full py-2.5 rounded-xl bg-primary text-white font-bold text-xs uppercase tracking-wide shadow-md">Settle Debt</button>
             </div>
         </div>
     </div>
