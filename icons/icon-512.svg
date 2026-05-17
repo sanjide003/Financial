@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="FinTrack wallet icon">
+  <rect width="512" height="512" rx="112" fill="#10b981"/>
+  <rect x="102" y="171" width="309" height="192" rx="48" fill="#ffffff"/>
+  <rect x="267" y="219" width="144" height="96" rx="26" fill="#047857"/>
+  <circle cx="317" cy="267" r="14" fill="#ffffff"/>
+  <path d="M144 168c27-51 85-77 144-53l72 30H163c-9 0-16 8-19 23z" fill="#d1fae5" opacity=".95"/>
+</svg>

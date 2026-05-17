@@ -1,4 +1,4 @@
-import { db, collection, addDoc, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from './firebase-config.js';
+import { db, collection, addDoc, getDocs, query, where, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from './firebase-config.js';
 
 let activeUnsubscribes = [];
 
@@ -32,26 +32,38 @@ const addRecord = async (collectionName, data) => {
     }
 };
 
+const upsertUser = async (userId, data) => {
+    await setDoc(doc(db, 'users', userId), data, { merge: true });
+};
+
+const updateRecord = async (collectionName, docId, data) => {
+    await updateDoc(doc(db, collectionName, docId), data);
+};
+
 const deleteRecord = async (collectionName, docId) => {
     await deleteDoc(doc(db, collectionName, docId));
 };
 
-const addNotification = async (userId, title, message) => {
+const addNotification = async (userId, title, message, extraData = {}) => {
     await addRecord("notifications", {
         userId,
         title,
         message,
         timestamp: new Date().toISOString(),
-        read: false
+        read: false,
+        ...extraData
     });
 };
 
-const clearNotifications = async () => {
-    // Note: Deleting multiple docs requires querying first. 
-    // For simplicity in UI, we'll implement this later or use a batch delete.
-    window.app.showToast("Clear feature coming soon");
-}
+const clearNotifications = async (userId) => {
+    if (!userId) return;
 
-window.db = { listenToData, addRecord, deleteRecord, addNotification, clearNotifications };
+    const q = query(collection(db, 'notifications'), where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    await Promise.all(snapshot.docs.map((item) => deleteDoc(doc(db, 'notifications', item.id))));
+    window.app.showToast('Notifications cleared');
+};
 
-export { listenToData, addRecord, deleteRecord, addNotification };
+window.db = { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
+
+export { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
