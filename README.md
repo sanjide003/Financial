@@ -14,6 +14,7 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 ├── docs/
 │   ├── STATUS_ML.md
 │   ├── DEPLOYMENT_ML.md
+│   ├── VERCEL_PUBLISH_ML.md
 │   ├── PRIVACY_SECURITY_ML.md
 │   ├── PRIVACY_POLICY_ML.md
 │   ├── TERMS_ML.md
@@ -36,6 +37,7 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 ├── firestore.rules
 ├── firestore.indexes.json
 ├── firebase.json
+├── vercel.json
 ├── .firebaserc.example
 ├── package.json
 └── .env.example
@@ -59,4 +61,4 @@ This runs JavaScript syntax checks, JSON validation, unit tests, and static E2E 
 
 ## Current status
 
-See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap. Use `docs/DEPLOYMENT_ML.md` for release steps, `docs/PRIVACY_SECURITY_ML.md` for security/privacy notes, and the policy/audit docs for launch readiness.
+See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap. Use `docs/DEPLOYMENT_ML.md` and `docs/VERCEL_PUBLISH_ML.md` for release steps, `docs/PRIVACY_SECURITY_ML.md` for security/privacy notes, and the policy/audit docs for launch readiness.

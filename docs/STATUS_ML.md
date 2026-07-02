@@ -13,7 +13,9 @@
 - GitHub Actions quality-check workflow ചേർത്തു.
 - Deployment and privacy/security Malayalam docs ചേർത്തു.
 - Firebase Hosting config and GitHub deploy workflow scaffold ചേർത്തു.
+- Vercel static hosting config and Malayalam publish guide ചേർത്തു.
 - Firebase App Check runtime hook ചേർത്തു.
+- Provided App Check/reCAPTCHA site key `index.html` runtime config-ൽ ചേർത്തു.
 - Sync status indicator ചേർത്തു.
 - PDF print/export, JSON backup export/import ചേർത്തു.
 - Draft privacy policy, terms, data retention, and audit checklist ചേർത്തു.
