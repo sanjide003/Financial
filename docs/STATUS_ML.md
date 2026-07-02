@@ -14,20 +14,19 @@
 - Deployment and privacy/security Malayalam docs ചേർത്തു.
 - Firebase Hosting config and GitHub deploy workflow scaffold ചേർത്തു.
 - Vercel static hosting config and Malayalam publish guide ചേർത്തു.
-- Firebase App Check runtime hook ചേർത്തു.
-- Provided App Check/reCAPTCHA site key `index.html` runtime config-ൽ ചേർത്തു.
-- Google Cloud Fraud Defense key-ന് യോജിക്കാൻ App Check provider runtime option `recaptcha-enterprise` ആയി ചേർത്തു.
+- Captcha/App Check runtime dependency ഒഴിവാക്കി; free-plan friendly ആയി Firebase Auth + Firestore rules മാത്രം ഉപയോഗിക്കുന്നു.
+- Email/password signup, login, password reset support ചേർത്തു.
 - India timezone പോലുള്ള UTC+ timezones-ൽ record save/update തടഞ്ഞ date validation bug fix ചെയ്തു.
 - Sync status indicator ചേർത്തു.
 - PDF print/export, JSON backup export/import ചേർത്തു.
-- Draft privacy policy, terms, data retention, and audit checklist ചേർത്തു.
+- Draft privacy policy, terms, data retention, audit checklist, and full product roadmap ചേർത്തു.
 - Static E2E smoke checks ചേർത്തു.
 
 ## Production-ready ആകാൻ ഇനി ബാക്കി
 1. Firebase Console-ൽ `firestore.rules` and `firestore.indexes.json` deploy ചെയ്യുക.
 2. Dev/Staging/Production Firebase projects വേർതിരിക്കുക.
-3. Firebase App Check enable ചെയ്യുക.
-4. GitHub/Firebase secrets configure ചെയ്ത് deploy workflow run ചെയ്യുക.
+3. Firebase Authentication Sign-in method-ൽ Email/Password enable ചെയ്യുക.
+4. Vercel project deploy ചെയ്യുക.
 5. Real browser Playwright/Cypress E2E suite add ചെയ്യുക.
 6. Sync conflict resolution UX polish ചെയ്യുക.
 7. Remaining UI labels full Malayalam/English i18n dictionary-ലേക്ക് migrate ചെയ്യുക.

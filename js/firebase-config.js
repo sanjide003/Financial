@@ -1,19 +1,18 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-  initializeAppCheck,
-  ReCaptchaEnterpriseProvider,
-  ReCaptchaV3Provider
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
-import {
   getAuth,
   GoogleAuthProvider,
   browserLocalPersistence,
+  createUserWithEmailAndPassword,
   getRedirectResult,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
-  signOut
+  signOut,
+  updateProfile
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
   initializeFirestore,
@@ -43,18 +42,6 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const appCheckSiteKey = window.FINTRACK_APP_CHECK_SITE_KEY || '';
-const appCheckProviderType = window.FINTRACK_APP_CHECK_PROVIDER || 'recaptcha-enterprise';
-if (appCheckSiteKey) {
-  const provider = appCheckProviderType === 'recaptcha-v3'
-    ? new ReCaptchaV3Provider(appCheckSiteKey)
-    : new ReCaptchaEnterpriseProvider(appCheckSiteKey);
-
-  initializeAppCheck(app, {
-    provider,
-    isTokenAutoRefreshEnabled: true
-  });
-}
 const auth = getAuth(app);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
@@ -67,12 +54,16 @@ export {
   db,
   provider,
   browserLocalPersistence,
+  createUserWithEmailAndPassword,
   getRedirectResult,
+  sendPasswordResetEmail,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   onAuthStateChanged,
   signOut,
+  updateProfile,
   collection,
   addDoc,
   getDocs,

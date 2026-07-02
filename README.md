@@ -15,6 +15,7 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 │   ├── STATUS_ML.md
 │   ├── DEPLOYMENT_ML.md
 │   ├── VERCEL_PUBLISH_ML.md
+│   ├── FINTRACK_PRODUCT_PLAN_ML.md
 │   ├── PRIVACY_SECURITY_ML.md
 │   ├── PRIVACY_POLICY_ML.md
 │   ├── TERMS_ML.md
@@ -56,7 +57,7 @@ This runs JavaScript syntax checks, JSON validation, unit tests, and static E2E 
 1. Create separate Firebase projects for development, staging, and production.
 2. Enable Google Authentication and add the deployed domain to authorized domains.
 3. Deploy `firestore.rules` and `firestore.indexes.json` before using real data.
-4. Enable Firebase App Check for production.
+4. Enable Email/Password and Google sign-in providers.
 5. Keep `js/firebase-config.js` aligned with the intended Firebase project for the deployment target.
 
 ## Current status
