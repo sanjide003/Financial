@@ -2,14 +2,14 @@
 
 ## ഞാൻ code-ൽ ചെയ്തു വെച്ചത്
 - Vercel static hosting config: `vercel.json`.
-- Firebase App Check site key runtime config: `index.html`.
+- Firebase App Check site key and provider runtime config: `index.html`. Screenshot-ൽ Google Cloud Fraud Defense / Website Score key ആണ് കാണുന്നത്, അതിനാൽ current provider `recaptcha-enterprise` ആയി set ചെയ്തിട്ടുണ്ട്.
 - Firestore rules/index deploy files: `firestore.rules`, `firestore.indexes.json`, `firebase.json`.
 - Local quality command: `npm run check`.
 
 ## നിങ്ങൾ account-ൽ ചെയ്യേണ്ടത്
 1. Firebase Console → Authentication → Settings → Authorized domains → Vercel domain add ചെയ്യുക.
 2. Google Cloud reCAPTCHA/Fraud Defense key → allowed domains-ൽ Vercel domain add ചെയ്യുക.
-3. Firebase Console → App Check → Web app → reCAPTCHA v3 configure ചെയ്യുക.
+3. Firebase Console → App Check → Web app → **reCAPTCHA Enterprise** choose ചെയ്യുക. സാധാരണ reCAPTCHA v3 key ആണെങ്കിൽ `index.html`-ൽ `FINTRACK_APP_CHECK_PROVIDER` value `recaptcha-v3` ആക്കണം.
 4. Firebase CLI വഴി rules/indexes deploy ചെയ്യുക:
 
 ```bash

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
   initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
   ReCaptchaV3Provider
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app-check.js";
 import {
@@ -43,9 +44,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const appCheckSiteKey = window.FINTRACK_APP_CHECK_SITE_KEY || '';
+const appCheckProviderType = window.FINTRACK_APP_CHECK_PROVIDER || 'recaptcha-enterprise';
 if (appCheckSiteKey) {
+  const provider = appCheckProviderType === 'recaptcha-v3'
+    ? new ReCaptchaV3Provider(appCheckSiteKey)
+    : new ReCaptchaEnterpriseProvider(appCheckSiteKey);
+
   initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(appCheckSiteKey),
+    provider,
     isTokenAutoRefreshEnabled: true
   });
 }
