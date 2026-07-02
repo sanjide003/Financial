@@ -399,6 +399,29 @@ const typeToFormType = (type) => {
     return type;
 };
 
+const isValidIsoDate = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+    const date = new Date(`${value}T00:00:00`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const validateRecordForm = ({ rawType, finalType, amount, category, date, fromAccount, toAccount, reminderDays }) => {
+    if (!Number.isFinite(amount) || amount <= 0) return 'Please enter an amount greater than zero.';
+    if (!isValidIsoDate(date)) return 'Please select a valid date.';
+    if (rawType !== 'transfer' && !category.trim()) {
+        return rawType === 'debt' ? "Please enter the person's name." : 'Please enter a category/source.';
+    }
+    if (['expense', 'transfer'].includes(rawType) || ['loan_given', 'debt_paid'].includes(finalType)) {
+        if (!fromAccount) return 'Please select the account money is paid from.';
+    }
+    if (['income', 'transfer'].includes(rawType) || ['loan_taken', 'debt_received'].includes(finalType)) {
+        if (!toAccount) return 'Please select the account money is received into.';
+    }
+    if (rawType === 'transfer' && fromAccount === toAccount) return 'Transfer accounts must be different.';
+    if (rawType === 'debt' && (reminderDays < 0 || reminderDays > 365)) return 'Reminder days must be between 0 and 365.';
+    return '';
+};
+
 const editTransaction = (transactionId) => {
     const transaction = appState.transactions.find((item) => item.id === transactionId);
     if (!transaction) return showToast('Transaction not found');
@@ -457,12 +480,26 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
         finalType = appState.editingOriginalType;
     }
 
+    const amount = parseFloat(document.getElementById('form-amount').value);
+    const category = document.getElementById('form-category').value.trim();
+    const date = document.getElementById('form-date').value;
+    const fromAccount = document.getElementById('form-from-account').value;
+    const toAccount = document.getElementById('form-to-account').value;
+    const reminderDays = parseInt(document.getElementById('form-debt-reminder-days').value, 10) || 0;
+    const validationError = validateRecordForm({ rawType, finalType, amount, category, date, fromAccount, toAccount, reminderDays });
+
+    if (validationError) {
+        showToast(validationError);
+        btn.innerHTML = appState.editingTransactionId ? 'Update Record' : 'Save Record';
+        return;
+    }
+
     const data = {
         userId: appState.user.uid,
         type: finalType,
-        amount: parseFloat(document.getElementById('form-amount').value),
-        category: document.getElementById('form-category').value,
-        date: document.getElementById('form-date').value,
+        amount,
+        category: rawType === 'transfer' ? 'Transfer' : category,
+        date,
         note: document.getElementById('form-note').value,
         timestamp: appState.editingTransactionId
             ? (appState.transactions.find((item) => item.id === appState.editingTransactionId)?.timestamp || new Date().toISOString())
@@ -471,16 +508,16 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
     };
 
     if(rawType === 'expense' || rawType === 'transfer' || finalType === 'loan_given' || finalType === 'debt_paid') {
-        data.from_account = document.getElementById('form-from-account').value;
+        data.from_account = fromAccount;
     }
     if(rawType === 'income' || rawType === 'transfer' || finalType === 'loan_taken' || finalType === 'debt_received') {
-        data.to_account = document.getElementById('form-to-account').value;
+        data.to_account = toAccount;
     }
     if (rawType === 'debt') {
         data.phone = document.getElementById('form-debt-phone').value.trim();
         data.whatsapp = document.getElementById('form-debt-whatsapp').value.trim();
         data.dueDate = document.getElementById('form-debt-due-date').value;
-        data.reminderDays = parseInt(document.getElementById('form-debt-reminder-days').value, 10) || 0;
+        data.reminderDays = reminderDays;
     }
 
     try {

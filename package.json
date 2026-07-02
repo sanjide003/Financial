@@ -1,0 +1,13 @@
+{
+  "name": "fintrack-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile-first personal finance PWA for accounts, transactions, debts, EMIs, and reports.",
+  "scripts": {
+    "check:js": "node --check js/app.js && node --check js/auth.js && node --check js/db.js && node --check js/calc.js && node --check js/firebase-config.js && node --check sw.js",
+    "check:json": "python3 -m json.tool manifest.json >/tmp/fintrack-manifest.json.checked && python3 -m json.tool package.json >/tmp/fintrack-package.json.checked && python3 -m json.tool firestore.indexes.json >/tmp/fintrack-indexes.json.checked",
+    "test": "node --test tests/*.test.js",
+    "check": "npm run check:js && npm run check:json && npm test"
+  }
+}
