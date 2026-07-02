@@ -12,7 +12,9 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 ├── PRODUCT_BLUEPRINT_ML.md
 ├── README.md
 ├── docs/
-│   └── STATUS_ML.md
+│   ├── STATUS_ML.md
+│   ├── DEPLOYMENT_ML.md
+│   └── PRIVACY_SECURITY_ML.md
 ├── css/
 │   └── style.css
 ├── icons/
@@ -50,4 +52,4 @@ This runs JavaScript syntax checks, JSON validation, and unit tests.
 
 ## Current status
 
-See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap.
+See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap. Use `docs/DEPLOYMENT_ML.md` for release steps and `docs/PRIVACY_SECURITY_ML.md` for security/privacy notes.

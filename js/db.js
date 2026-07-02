@@ -64,6 +64,16 @@ const clearNotifications = async (userId) => {
     window.app.showToast('Notifications cleared');
 };
 
-window.db = { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
+const markAllNotificationsRead = async (userId) => {
+    if (!userId) return;
 
-export { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
+    const q = query(collection(db, 'notifications'), where('userId', '==', userId), where('read', '==', false));
+    const snapshot = await getDocs(q);
+    const readAt = new Date().toISOString();
+    await Promise.all(snapshot.docs.map((item) => updateDoc(doc(db, 'notifications', item.id), { read: true, readAt })));
+    window.app.showToast('Notifications marked as read');
+};
+
+window.db = { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };
+
+export { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };

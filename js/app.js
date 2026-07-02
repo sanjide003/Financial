@@ -316,6 +316,51 @@ const populateTransactionFilters = () => {
 
 const applyTxnFilters = () => renderTxnList(appState.activeTxnFilter);
 
+const csvEscape = (value = '') => {
+    const text = String(value ?? '');
+    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+};
+
+const exportTransactionsCSV = () => {
+    const reportMonth = document.getElementById('view-reports')?.classList.contains('active')
+        ? document.getElementById('report-month')?.value
+        : '';
+    const rows = reportMonth
+        ? appState.transactions.filter((transaction) => transaction.date?.startsWith(reportMonth))
+        : getFilteredTransactions(appState.activeTxnFilter);
+    if (!rows.length) return showToast('No transactions to export.');
+
+    const accountName = (id) => appState.accounts.find((account) => account.id === id)?.name || '';
+    const headers = ['date', 'type', 'amount', 'category', 'from_account', 'to_account', 'note', 'phone', 'whatsapp', 'dueDate'];
+    const csv = [
+        headers.join(','),
+        ...rows.map((transaction) => [
+            transaction.date,
+            transaction.type,
+            transaction.amount,
+            transaction.category,
+            accountName(transaction.from_account),
+            accountName(transaction.to_account),
+            transaction.note,
+            transaction.phone,
+            transaction.whatsapp,
+            transaction.dueDate
+        ].map(csvEscape).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const month = reportMonth || document.getElementById('filter-month')?.value || 'all';
+    link.href = url;
+    link.download = `fintrack-transactions-${month}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('CSV export downloaded.');
+};
+
 // --- Form & Input Handling ---
 const setupAddForm = () => {
     const fromSelect = document.getElementById('form-from-account');
@@ -829,6 +874,20 @@ const clearNotifications = async () => {
     await window.db.clearNotifications(appState.user.uid);
 };
 
+const markAllNotificationsRead = async () => {
+    await window.db.markAllNotificationsRead(appState.user.uid);
+};
+
+const openNotificationTarget = (notification) => {
+    if (notification.transactionId && notification.type === 'debt_reminder') {
+        const transaction = appState.transactions.find((item) => item.id === notification.transactionId);
+        if (transaction?.category) {
+            showDebtDetails(transaction.category);
+            return;
+        }
+    }
+    switchTab('notifications');
+};
 
 const closeAllActionMenus = () => {
     document.querySelectorAll('.action-menu').forEach((menu) => menu.classList.add('hidden'));
@@ -1142,7 +1201,7 @@ const updateNotificationsUI = () => {
     appState.notifications.forEach(n => {
         const date = new Date(n.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
         list.innerHTML += `
-            <div onclick="window.app.markNotificationRead('${n.id}')" class="bg-white p-3 rounded-xl border ${n.read ? 'border-gray-100' : 'border-blue-200 bg-blue-50'} shadow-sm cursor-pointer">
+            <div onclick="window.app.openNotification('${n.id}')" class="bg-white p-3 rounded-xl border ${n.read ? 'border-gray-100' : 'border-blue-200 bg-blue-50'} shadow-sm cursor-pointer">
                 <p class="text-sm font-bold text-gray-800">${escapeHtml(n.title)}</p>
                 <p class="text-xs text-gray-600 mt-1">${escapeHtml(n.message)}</p>
                 <p class="text-[9px] text-gray-400 mt-2">${date}</p>
@@ -1163,6 +1222,13 @@ const markNotificationRead = async (notificationId) => {
     }
 };
 
+const openNotification = async (notificationId) => {
+    const notification = appState.notifications.find((item) => item.id === notificationId);
+    if (!notification) return;
+    await markNotificationRead(notificationId);
+    openNotificationTarget(notification);
+};
+
 // Global Exports for HTML inline handlers
 window.app = { 
     initAfterAuth, 
@@ -1180,9 +1246,11 @@ window.app = {
     showDebtDetails,
     settleDebt,
     clearNotifications,
+    markAllNotificationsRead,
     closeAddSheet,
     toggleActionMenu,
     applyTxnFilters,
+    exportTransactionsCSV,
     setVaultTab,
     resetEmiModal,
     saveEmi,
@@ -1190,6 +1258,7 @@ window.app = {
     deleteEmi,
     markEmiPaid,
     markNotificationRead,
+    openNotification,
     filterTxns: (type) => {
         appState.activeTxnFilter = type;
         document.querySelectorAll('.filter-btn').forEach(btn => {
