@@ -13,6 +13,8 @@ let appState = {
     editingEmiId: null
 };
 
+const t = (key) => window.i18n?.t?.(key) || key;
+
 const escapeHtml = (value = '') => String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -68,6 +70,30 @@ const showToast = (msg) => {
     setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 3000);
 };
 
+const setSyncStatus = (status = 'synced') => {
+    const wrapper = document.getElementById('sync-status');
+    const dot = document.getElementById('sync-status-dot');
+    const text = document.getElementById('sync-status-text');
+    if (!wrapper || !dot || !text) return;
+
+    const states = {
+        synced: ['Synced', 'bg-green-500', 'text-green-700', 'bg-green-50'],
+        offline: ['Offline', 'bg-orange-500', 'text-orange-700', 'bg-orange-50'],
+        pending: ['Saving', 'bg-blue-500', 'text-blue-700', 'bg-blue-50'],
+        error: ['Sync error', 'bg-red-500', 'text-red-700', 'bg-red-50']
+    };
+    const [label, dotClass, textClass, bgClass] = states[status] || states.synced;
+    wrapper.className = `flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${bgClass} ${textClass}`;
+    dot.className = `w-2 h-2 rounded-full ${dotClass}`;
+    text.innerText = label;
+};
+
+const updateSyncStatusFromSnapshot = (metadata = {}) => {
+    if (!navigator.onLine) return setSyncStatus('offline');
+    if (metadata.hasPendingWrites) return setSyncStatus('pending');
+    setSyncStatus(metadata.fromCache ? 'offline' : 'synced');
+};
+
 // --- Data Fetching & Core Logic ---
 const initAfterAuth = (user) => {
     appState.user = user;
@@ -81,13 +107,15 @@ const initAfterAuth = (user) => {
     }
     
     // Listen to Accounts
-    window.db.listenToData(user.uid, 'accounts', (data) => {
+    window.db.listenToData(user.uid, 'accounts', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         appState.accounts = data;
         updateAccountsUI();
     });
 
     // Listen to Transactions
-    window.db.listenToData(user.uid, 'transactions', (data) => {
+    window.db.listenToData(user.uid, 'transactions', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         // Sort data locally by date descending
         appState.transactions = data.sort((a, b) => new Date(b.date) - new Date(a.date));
         updateDashboard();
@@ -97,14 +125,16 @@ const initAfterAuth = (user) => {
     });
 
     // Listen to scheduled EMIs and bills
-    window.db.listenToData(user.uid, 'scheduled_emis', (data) => {
+    window.db.listenToData(user.uid, 'scheduled_emis', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         appState.scheduledEmis = data.sort((a, b) => Number(a.dueDay || 0) - Number(b.dueDay || 0));
         updateDashboard();
         renderEmis();
     });
 
     // Listen to Notifications
-    window.db.listenToData(user.uid, 'notifications', (data) => {
+    window.db.listenToData(user.uid, 'notifications', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         appState.notifications = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         updateNotificationsUI();
         updateDashboard();
@@ -328,7 +358,7 @@ const exportTransactionsCSV = () => {
     const rows = reportMonth
         ? appState.transactions.filter((transaction) => transaction.date?.startsWith(reportMonth))
         : getFilteredTransactions(appState.activeTxnFilter);
-    if (!rows.length) return showToast('No transactions to export.');
+    if (!rows.length) return showToast(t('noTransactionsToExport'));
 
     const accountName = (id) => appState.accounts.find((account) => account.id === id)?.name || '';
     const headers = ['date', 'type', 'amount', 'category', 'from_account', 'to_account', 'note', 'phone', 'whatsapp', 'dueDate'];
@@ -358,8 +388,77 @@ const exportTransactionsCSV = () => {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    showToast('CSV export downloaded.');
+    showToast(t('csvDownloaded'));
 };
+
+const exportReportPDF = () => {
+    const month = document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7);
+    const report = window.calc.generateMonthlyReport(appState.transactions, month);
+    const lines = report.sortedCategories.map((item) => `
+        <tr><td>${escapeHtml(item.name)}</td><td style="text-align:right">₹${item.amount.toFixed(2)}</td></tr>
+    `).join('');
+    const popup = window.open('', '_blank', 'width=720,height=900');
+    if (!popup) return showToast(t('popupBlocked'));
+
+    popup.document.write(`
+        <!doctype html>
+        <html>
+        <head>
+            <title>FinTrack Report ${month}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 32px; color: #111827; }
+                h1 { margin-bottom: 4px; }
+                .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
+                .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+                th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+                @media print { button { display: none; } }
+            </style>
+        </head>
+        <body>
+            <button onclick="window.print()">Save as PDF / Print</button>
+            <h1>FinTrack Monthly Report</h1>
+            <p>Month: ${escapeHtml(month)}</p>
+            <div class="cards">
+                <div class="card"><strong>Income</strong><br>₹${report.income.toFixed(2)}</div>
+                <div class="card"><strong>Expense</strong><br>₹${report.expense.toFixed(2)}</div>
+                <div class="card"><strong>Savings</strong><br>₹${report.savings.toFixed(2)}</div>
+            </div>
+            <h2>Expense Breakdown</h2>
+            <table><thead><tr><th>Category</th><th style="text-align:right">Amount</th></tr></thead><tbody>${lines || '<tr><td colspan="2">No data</td></tr>'}</tbody></table>
+            <script>window.onload = () => window.print();<\/script>
+        </body>
+        </html>
+    `);
+    popup.document.close();
+    showToast(t('pdfReady'));
+};
+
+const downloadJson = (filename, payload) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const exportBackupJSON = () => {
+    downloadJson(`fintrack-backup-${new Date().toISOString().slice(0, 10)}.json`, {
+        exportedAt: new Date().toISOString(),
+        version: 1,
+        accounts: appState.accounts,
+        transactions: appState.transactions,
+        scheduled_emis: appState.scheduledEmis,
+        notifications: appState.notifications
+    });
+    showToast(t('backupDownloaded'));
+};
+
+const openBackupImport = () => document.getElementById('backup-import-file')?.click();
 
 // --- Form & Input Handling ---
 const setupAddForm = () => {
@@ -908,6 +1007,9 @@ document.addEventListener('click', (event) => {
     }
 });
 
+window.addEventListener('online', () => setSyncStatus('synced'));
+window.addEventListener('offline', () => setSyncStatus('offline'));
+
 const getCurrentMonthKey = () => new Date().toISOString().slice(0, 7);
 
 const getEmiDueDate = (emi) => {
@@ -1229,6 +1331,36 @@ const openNotification = async (notificationId) => {
     openNotificationTarget(notification);
 };
 
+document.getElementById('backup-import-file')?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !appState.user) return;
+
+    try {
+        const backup = JSON.parse(await file.text());
+        const collections = ['accounts', 'transactions', 'scheduled_emis'];
+        let imported = 0;
+
+        for (const collectionName of collections) {
+            const rows = Array.isArray(backup[collectionName]) ? backup[collectionName] : [];
+            for (const row of rows) {
+                const { id, ...data } = row;
+                await window.db.addRecord(collectionName, {
+                    ...data,
+                    userId: appState.user.uid,
+                    importedAt: new Date().toISOString()
+                });
+                imported += 1;
+            }
+        }
+
+        showToast(imported ? t('backupImportDone') : t('backupImportEmpty'));
+    } catch (error) {
+        console.error('Backup import error', error);
+        showToast('Backup import failed.');
+    }
+});
+
 // Global Exports for HTML inline handlers
 window.app = { 
     initAfterAuth, 
@@ -1247,10 +1379,13 @@ window.app = {
     settleDebt,
     clearNotifications,
     markAllNotificationsRead,
+    exportBackupJSON,
+    openBackupImport,
     closeAddSheet,
     toggleActionMenu,
     applyTxnFilters,
     exportTransactionsCSV,
+    exportReportPDF,
     setVaultTab,
     resetEmiModal,
     saveEmi,
@@ -1259,6 +1394,7 @@ window.app = {
     markEmiPaid,
     markNotificationRead,
     openNotification,
+    setSyncStatus,
     filterTxns: (type) => {
         appState.activeTxnFilter = type;
         document.querySelectorAll('.filter-btn').forEach(btn => {

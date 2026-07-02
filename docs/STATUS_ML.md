@@ -12,18 +12,24 @@
 - Notification Read All and debt reminder deep-link behavior ചേർത്തു.
 - GitHub Actions quality-check workflow ചേർത്തു.
 - Deployment and privacy/security Malayalam docs ചേർത്തു.
+- Firebase Hosting config and GitHub deploy workflow scaffold ചേർത്തു.
+- Firebase App Check runtime hook ചേർത്തു.
+- Sync status indicator ചേർത്തു.
+- PDF print/export, JSON backup export/import ചേർത്തു.
+- Draft privacy policy, terms, data retention, and audit checklist ചേർത്തു.
+- Static E2E smoke checks ചേർത്തു.
 
 ## Production-ready ആകാൻ ഇനി ബാക്കി
 1. Firebase Console-ൽ `firestore.rules` and `firestore.indexes.json` deploy ചെയ്യുക.
 2. Dev/Staging/Production Firebase projects വേർതിരിക്കുക.
 3. Firebase App Check enable ചെയ്യുക.
-4. Hosting pipeline connect ചെയ്ത് Firebase Hosting/approved host-ലേക്ക് deploy ചെയ്യുക.
-5. Browser E2E tests add ചെയ്യുക.
-6. Sync status indicator polish ചെയ്യുക.
-7. Full Malayalam/English i18n strings centralize ചെയ്യുക.
-8. PDF export, backup/restore add ചെയ്യുക.
-9. Privacy policy, terms, data retention policy publish ചെയ്യുക.
-10. Lighthouse/accessibility/performance audit നടത്തുക.
+4. GitHub/Firebase secrets configure ചെയ്ത് deploy workflow run ചെയ്യുക.
+5. Real browser Playwright/Cypress E2E suite add ചെയ്യുക.
+6. Sync conflict resolution UX polish ചെയ്യുക.
+7. Remaining UI labels full Malayalam/English i18n dictionary-ലേക്ക് migrate ചെയ്യുക.
+8. Server-side scheduled/push notifications പരിഗണിക്കുക.
+9. Draft privacy policy/terms/data retention legal review ചെയ്ത് publish ചെയ്യുക.
+10. Lighthouse/accessibility/performance audit execute ചെയ്ത് findings fix ചെയ്യുക.
 
 ## Release readiness
 - Current level: MVP / beta-ready after Firebase rules deployment.

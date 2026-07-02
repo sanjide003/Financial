@@ -21,6 +21,7 @@
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/db.js"></script>
     <script type="module" src="js/calc.js"></script>
+    <script type="module" src="js/i18n.js"></script>
     <script type="module" src="js/app.js"></script>
 
     <script>
@@ -63,6 +64,10 @@
                 <h1 class="text-xl font-bold text-gray-800 tracking-tight">FinTrack</h1>
             </div>
             <div class="flex items-center gap-3">
+                <div id="sync-status" class="hidden items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                    <span id="sync-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                    <span id="sync-status-text">Sync</span>
+                </div>
                 <div class="relative cursor-pointer bg-gray-100 p-2 rounded-full" onclick="window.app.switchTab('notifications')">
                     <i class="fa-regular fa-bell text-gray-600"></i>
                     <span id="unread-badge" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
@@ -88,6 +93,12 @@
                             </button>
                             <button id="btn-install-app" onclick="window.auth.installApp()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                 <i class="fa-solid fa-download text-primary w-4"></i> Install FinTrack
+                            </button>
+                            <button onclick="window.app.exportBackupJSON(); window.auth.closeProfileMenu()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fa-solid fa-file-export text-secondary w-4"></i> Export Backup
+                            </button>
+                            <button onclick="window.app.openBackupImport(); window.auth.closeProfileMenu()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fa-solid fa-file-import text-orange-500 w-4"></i> Import Backup
                             </button>
                             <button onclick="window.auth.logout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50">
                                 <i class="fa-solid fa-right-from-bracket w-4"></i> Logout
@@ -283,6 +294,7 @@
                     <h2 class="text-xl font-bold text-gray-800">Monthly Reports</h2>
                     <div class="flex items-center gap-2">
                         <button onclick="window.app.exportTransactionsCSV()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-primary">CSV</button>
+                        <button onclick="window.app.exportReportPDF()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-blue-600">PDF</button>
                         <input type="month" id="report-month" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-sm font-bold outline-none text-gray-700">
                     </div>
                 </div>
@@ -473,6 +485,7 @@
     <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full text-sm shadow-lg z-50 transition-opacity duration-300 opacity-0 pointer-events-none flex items-center gap-2">
         <i class="fa-solid fa-circle-check text-green-400"></i> <span id="toast-msg">Message</span>
     </div>
+    <input type="file" id="backup-import-file" accept="application/json" class="hidden">
 
     <!-- PWA Registration -->
     <script>

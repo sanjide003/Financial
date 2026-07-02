@@ -14,7 +14,11 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 ├── docs/
 │   ├── STATUS_ML.md
 │   ├── DEPLOYMENT_ML.md
-│   └── PRIVACY_SECURITY_ML.md
+│   ├── PRIVACY_SECURITY_ML.md
+│   ├── PRIVACY_POLICY_ML.md
+│   ├── TERMS_ML.md
+│   ├── DATA_RETENTION_ML.md
+│   └── AUDIT_CHECKLIST_ML.md
 ├── css/
 │   └── style.css
 ├── icons/
@@ -25,11 +29,14 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 │   ├── auth.js
 │   ├── calc.js
 │   ├── db.js
+│   ├── i18n.js
 │   └── firebase-config.js
 ├── tests/
 │   └── calc.test.js
 ├── firestore.rules
 ├── firestore.indexes.json
+├── firebase.json
+├── .firebaserc.example
 ├── package.json
 └── .env.example
 ```
@@ -40,7 +47,7 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 npm run check
 ```
 
-This runs JavaScript syntax checks, JSON validation, and unit tests.
+This runs JavaScript syntax checks, JSON validation, unit tests, and static E2E smoke checks.
 
 ## Firebase deployment checklist
 
@@ -52,4 +59,4 @@ This runs JavaScript syntax checks, JSON validation, and unit tests.
 
 ## Current status
 
-See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap. Use `docs/DEPLOYMENT_ML.md` for release steps and `docs/PRIVACY_SECURITY_ML.md` for security/privacy notes.
+See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap. Use `docs/DEPLOYMENT_ML.md` for release steps, `docs/PRIVACY_SECURITY_ML.md` for security/privacy notes, and the policy/audit docs for launch readiness.

@@ -8,6 +8,8 @@
     "check:js": "node --check js/app.js && node --check js/auth.js && node --check js/db.js && node --check js/calc.js && node --check js/firebase-config.js && node --check sw.js",
     "check:json": "python3 -m json.tool manifest.json >/tmp/fintrack-manifest.json.checked && python3 -m json.tool package.json >/tmp/fintrack-package.json.checked && python3 -m json.tool firestore.indexes.json >/tmp/fintrack-indexes.json.checked",
     "test": "node --test tests/*.test.js",
-    "check": "npm run check:js && npm run check:json && npm test"
+    "check": "npm run check:js && npm run check:json && npm test && npm run test:e2e",
+    "test:e2e": "node --test tests/e2e-*.test.js",
+    "audit:static": "node --test tests/e2e-static.test.js"
   }
 }

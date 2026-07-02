@@ -7,6 +7,7 @@ const CORE_ASSETS = [
   './js/auth.js',
   './js/db.js',
   './js/calc.js',
+  './js/i18n.js',
   './js/app.js',
   './manifest.json',
   './icons/icon-192.svg',

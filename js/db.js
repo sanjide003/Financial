@@ -9,14 +9,18 @@ const listenToData = (userId, collectionName, callback, extraConditions = []) =>
         ...extraConditions
     );
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
         const data = [];
         snapshot.forEach((doc) => {
             data.push({ id: doc.id, ...doc.data() });
         });
-        callback(data);
+        callback(data, {
+            fromCache: snapshot.metadata.fromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        });
     }, (error) => {
         console.error(`Error fetching ${collectionName}:`, error);
+        window.app?.setSyncStatus?.('error');
     });
 
     activeUnsubscribes.push(unsubscribe);
