@@ -39,6 +39,7 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 ├── firestore.indexes.json
 ├── firebase.json
 ├── vercel.json
+├── .vercelignore
 ├── .firebaserc.example
 ├── package.json
 └── .env.example
@@ -50,7 +51,7 @@ FinTrack is a mobile-first personal finance PWA for tracking accounts, income, e
 npm run check
 ```
 
-This runs JavaScript syntax checks, JSON validation, unit tests, and static E2E smoke checks.
+This runs JavaScript syntax checks, JSON validation, unit tests, and static E2E smoke checks. Vercel publishes only the static runtime files because `.vercelignore` excludes docs, tests, GitHub workflows, Firebase rule files, and examples from the hosted app bundle.
 
 ## Firebase deployment checklist
 

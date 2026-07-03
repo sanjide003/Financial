@@ -2,6 +2,7 @@
 
 ## ഞാൻ code-ൽ ചെയ്തു വെച്ചത്
 - Vercel static hosting config: `vercel.json`.
+- Vercel publish clean-up: `.vercelignore` വഴി docs/tests/GitHub workflows/Firebase deploy files hosted app bundle-ൽ നിന്ന് ഒഴിവാക്കി.
 - Captcha/App Check code ഒഴിവാക്കി; Firebase Auth + Firestore rules ആണ് ഇപ്പോൾ primary protection.
 - Firestore rules/index deploy files: `firestore.rules`, `firestore.indexes.json`, `firebase.json`.
 - Local quality command: `npm run check`.
@@ -28,3 +29,7 @@ firebase deploy --only firestore:rules,firestore:indexes
 - Cloud Functions ഒഴിവാക്കുക; client-side reminders മതി.
 - Firestore usage dashboard നോക്കുക.
 - Backup/PDF/CSV browser-side ആയതിനാൽ extra Firebase billing ഇല്ല.
+
+
+## Vercel-ൽ publish ആകേണ്ട runtime files മാത്രം
+Vercel deployment-ൽ പ്രധാനമായി വേണ്ടത് `index.html`, `manifest.json`, `sw.js`, `css/`, `icons/`, `js/`, `vercel.json` എന്നിവയാണ്. Firebase rules/indexes repo-ൽ നിലനിർത്തിയിട്ടുണ്ട്, പക്ഷേ അവ Vercel static bundle-ൽ publish ചെയ്യേണ്ടതില്ല; Firebase CLI ഉപയോഗിച്ച് deploy ചെയ്യാനുള്ള backend config മാത്രമാണ്.
