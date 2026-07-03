@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsIncomingUserData() {
+      return signedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    function ownsExistingUserData() {
+      return signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    function isSharedWithUser() {
+      return signedIn()
+        && request.auth.token.email != null
+        && resource.data.sharedWith is list
+        && request.auth.token.email in resource.data.sharedWith;
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /accounts/{accountId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /scheduled_emis/{emiId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /budgets/{budgetId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /investments/{investmentId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /assets/{assetId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /liabilities/{liabilityId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /goals/{goalId} {
+      allow read: if ownsExistingUserData() || isSharedWithUser();
+      allow update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /family_members/{memberId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

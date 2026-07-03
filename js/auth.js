@@ -2,18 +2,23 @@ import {
     auth,
     provider,
     browserLocalPersistence,
+    createUserWithEmailAndPassword,
     getRedirectResult,
+    sendPasswordResetEmail,
     setPersistence,
+    signInWithEmailAndPassword,
     signInWithPopup,
     signInWithRedirect,
     onAuthStateChanged,
-    signOut
+    signOut,
+    updateProfile
 } from './firebase-config.js';
 
 let currentUser = null;
 let authInitialized = false;
 let deferredInstallPrompt = null;
 let isAppInstalled = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+let emailAuthMode = 'login';
 
 const loginButtonHtml = '<img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google"> Google വഴി ലോഗിൻ ചെയ്യുക';
 
@@ -40,7 +45,7 @@ const showMessage = (message) => {
     if (window.app?.showToast) {
         window.app.showToast(message);
     } else {
-        alert(message);
+        console.warn(message);
     }
 };
 
@@ -144,10 +149,79 @@ const getFriendlyAuthError = (error) => {
         return 'Network പ്രശ്നം കാരണം Google sign-in പൂർത്തിയാക്കാൻ കഴിഞ്ഞില്ല. Internet connection പരിശോധിക്കുക.';
     }
     if (code === 'auth/operation-not-allowed') {
-        return 'Firebase Console-ൽ Google provider enable ചെയ്തിട്ടില്ല. Authentication > Sign-in method > Google enable ചെയ്യുക.';
+        return 'Firebase Console-ൽ ഈ sign-in method enable ചെയ്തിട്ടില്ല. Authentication > Sign-in method-ൽ Google / Email-Password enable ചെയ്യുക.';
+    }
+    if (code === 'auth/email-already-in-use') {
+        return 'ഈ email ഉപയോഗിച്ച് account ഇതിനകം ഉണ്ട്. Login ചെയ്യുക അല്ലെങ്കിൽ password reset ചെയ്യുക.';
+    }
+    if (code === 'auth/invalid-email') {
+        return 'ശരിയായ email address നൽകുക.';
+    }
+    if (code === 'auth/weak-password') {
+        return 'Password കുറഞ്ഞത് 6 characters വേണം.';
+    }
+    if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+        return 'Email അല്ലെങ്കിൽ password തെറ്റാണ്. വീണ്ടും ശ്രമിക്കുക.';
     }
 
     return error?.message || 'Google sign-in പൂർത്തിയാക്കാൻ കഴിഞ്ഞില്ല. വീണ്ടും ശ്രമിക്കുക.';
+};
+
+const updateEmailAuthModeUI = () => {
+    const isSignup = emailAuthMode === 'signup';
+    document.getElementById('email-auth-name')?.classList.toggle('hidden', !isSignup);
+    document.getElementById('btn-email-auth').innerText = isSignup ? 'Create Account' : 'Login with Email';
+    document.getElementById('btn-toggle-email-mode').innerText = isSignup ? 'Already have an account? Login' : 'Create new account';
+};
+
+const toggleEmailAuthMode = () => {
+    emailAuthMode = emailAuthMode === 'login' ? 'signup' : 'login';
+    clearAuthError();
+    updateEmailAuthModeUI();
+};
+
+const handleEmailAuth = async (event) => {
+    event.preventDefault();
+    clearAuthError();
+
+    const button = document.getElementById('btn-email-auth');
+    const name = document.getElementById('email-auth-name').value.trim();
+    const email = document.getElementById('email-auth-email').value.trim();
+    const password = document.getElementById('email-auth-password').value;
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Please wait...';
+
+    try {
+        if (emailAuthMode === 'signup') {
+            const credential = await createUserWithEmailAndPassword(auth, email, password);
+            if (name) await updateProfile(credential.user, { displayName: name });
+        } else {
+            await signInWithEmailAndPassword(auth, email, password);
+        }
+    } catch (error) {
+        console.error('Email auth error', error);
+        showAuthError(getFriendlyAuthError(error));
+    } finally {
+        button.disabled = false;
+        updateEmailAuthModeUI();
+    }
+};
+
+const resetPassword = async () => {
+    clearAuthError();
+    const email = document.getElementById('email-auth-email').value.trim();
+    if (!email) {
+        showAuthError('Password reset ചെയ്യാൻ email address നൽകുക.');
+        return;
+    }
+
+    try {
+        await sendPasswordResetEmail(auth, email);
+        showMessage('Password reset email അയച്ചു. Inbox പരിശോധിക്കുക.');
+    } catch (error) {
+        console.error('Password reset error', error);
+        showAuthError(getFriendlyAuthError(error));
+    }
 };
 
 const isRedirectFallbackError = (error) => [
@@ -228,6 +302,10 @@ const initAuth = async () => {
     const loginBtn = document.getElementById('btn-login');
     loginBtn.innerHTML = loginButtonHtml;
     loginBtn.addEventListener('click', startGoogleLogin);
+    document.getElementById('email-auth-form')?.addEventListener('submit', handleEmailAuth);
+    document.getElementById('btn-toggle-email-mode')?.addEventListener('click', toggleEmailAuthMode);
+    document.getElementById('btn-reset-password')?.addEventListener('click', resetPassword);
+    updateEmailAuthModeUI();
     setupProfileAndInstallHandlers();
 
     try {
@@ -281,7 +359,7 @@ const setupProfileAndInstallHandlers = () => {
 
 const logout = async () => {
     closeProfileMenu();
-    if (!confirm('Are you sure you want to logout?')) return;
+    if (window.app?.showConfirmDialog && !await window.app.showConfirmDialog({ title: 'Logout?', message: 'Are you sure you want to logout?', okText: 'Logout' })) return;
 
     try {
         await signOut(auth);

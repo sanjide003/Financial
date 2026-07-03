@@ -9,14 +9,42 @@ const listenToData = (userId, collectionName, callback, extraConditions = []) =>
         ...extraConditions
     );
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
         const data = [];
         snapshot.forEach((doc) => {
             data.push({ id: doc.id, ...doc.data() });
         });
-        callback(data);
+        callback(data, {
+            fromCache: snapshot.metadata.fromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        });
     }, (error) => {
         console.error(`Error fetching ${collectionName}:`, error);
+        window.app?.setSyncStatus?.('error');
+    });
+
+    activeUnsubscribes.push(unsubscribe);
+};
+
+const listenToSharedData = (userEmail, collectionName, callback) => {
+    const normalizedEmail = (userEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) return;
+
+    const q = query(
+        collection(db, collectionName),
+        where('sharedWith', 'array-contains', normalizedEmail)
+    );
+
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data(), sharedCollection: collectionName }));
+        callback(data, {
+            fromCache: snapshot.metadata.fromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        });
+    }, (error) => {
+        console.error(`Error fetching shared ${collectionName}:`, error);
+        window.app?.setSyncStatus?.('error');
     });
 
     activeUnsubscribes.push(unsubscribe);
@@ -64,6 +92,16 @@ const clearNotifications = async (userId) => {
     window.app.showToast('Notifications cleared');
 };
 
-window.db = { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
+const markAllNotificationsRead = async (userId) => {
+    if (!userId) return;
 
-export { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications };
+    const q = query(collection(db, 'notifications'), where('userId', '==', userId), where('read', '==', false));
+    const snapshot = await getDocs(q);
+    const readAt = new Date().toISOString();
+    await Promise.all(snapshot.docs.map((item) => updateDoc(doc(db, 'notifications', item.id), { read: true, readAt })));
+    window.app.showToast('Notifications marked as read');
+};
+
+window.db = { listenToData, listenToSharedData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };
+
+export { listenToData, listenToSharedData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };

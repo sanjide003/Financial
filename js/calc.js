@@ -14,7 +14,8 @@ const processTransactions = (transactions, accounts) => {
 
     transactions.forEach(t => {
         const amount = parseFloat(t.amount);
-        const isCurrentMonth = t.date.startsWith(currentMonth);
+        if (!Number.isFinite(amount)) return;
+        const isCurrentMonth = Boolean(t.date?.startsWith(currentMonth));
 
         if (t.type === 'income') {
             if(accBalances[t.to_account]) accBalances[t.to_account].balance += amount;
@@ -72,7 +73,7 @@ const processTransactions = (transactions, accounts) => {
 };
 
 const generateMonthlyReport = (transactions, monthStr) => { // monthStr: "YYYY-MM"
-    const filtered = transactions.filter(t => t.date.startsWith(monthStr));
+    const filtered = transactions.filter(t => t.date?.startsWith(monthStr));
     
     let income = 0;
     let expense = 0;
@@ -95,5 +96,7 @@ const generateMonthlyReport = (transactions, monthStr) => { // monthStr: "YYYY-M
     return { income, expense, savings: income - expense, sortedCategories };
 }
 
-window.calc = { processTransactions, generateMonthlyReport };
+if (typeof window !== 'undefined') {
+    window.calc = { processTransactions, generateMonthlyReport };
+}
 export { processTransactions, generateMonthlyReport };
