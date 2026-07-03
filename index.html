@@ -11,6 +11,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for richer reports -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
@@ -21,6 +23,7 @@
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/db.js"></script>
     <script type="module" src="js/calc.js"></script>
+    <script type="module" src="js/i18n.js"></script>
     <script type="module" src="js/app.js"></script>
 
     <script>
@@ -49,6 +52,21 @@
                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
                 Sign in with Google
             </button>
+            <div class="flex items-center gap-3 my-5">
+                <div class="h-px bg-gray-100 flex-1"></div>
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">or email</span>
+                <div class="h-px bg-gray-100 flex-1"></div>
+            </div>
+            <form id="email-auth-form" class="space-y-3 text-left">
+                <input type="text" id="email-auth-name" class="hidden w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary" placeholder="Your name">
+                <input type="email" id="email-auth-email" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary" placeholder="Email address">
+                <input type="password" id="email-auth-password" required minlength="6" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary" placeholder="Password">
+                <button type="submit" id="btn-email-auth" class="w-full bg-primary text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-emerald-600 active:scale-[0.98] transition-all">Login with Email</button>
+            </form>
+            <div class="flex justify-between mt-3 text-xs font-bold">
+                <button type="button" id="btn-toggle-email-mode" class="text-primary">Create new account</button>
+                <button type="button" id="btn-reset-password" class="text-gray-400">Forgot password?</button>
+            </div>
             <p id="auth-error" class="text-red-500 text-xs mt-4 hidden"></p>
         </div>
     </section>
@@ -63,6 +81,10 @@
                 <h1 class="text-xl font-bold text-gray-800 tracking-tight">FinTrack</h1>
             </div>
             <div class="flex items-center gap-3">
+                <div id="sync-status" class="hidden items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                    <span id="sync-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                    <span id="sync-status-text">Sync</span>
+                </div>
                 <div class="relative cursor-pointer bg-gray-100 p-2 rounded-full" onclick="window.app.switchTab('notifications')">
                     <i class="fa-regular fa-bell text-gray-600"></i>
                     <span id="unread-badge" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
@@ -89,6 +111,12 @@
                             <button id="btn-install-app" onclick="window.auth.installApp()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                 <i class="fa-solid fa-download text-primary w-4"></i> Install FinTrack
                             </button>
+                            <button onclick="window.app.exportBackupJSON(); window.auth.closeProfileMenu()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fa-solid fa-file-export text-secondary w-4"></i> Export Backup
+                            </button>
+                            <button onclick="window.app.openBackupImport(); window.auth.closeProfileMenu()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fa-solid fa-file-import text-orange-500 w-4"></i> Import Backup
+                            </button>
                             <button onclick="window.auth.logout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50">
                                 <i class="fa-solid fa-right-from-bracket w-4"></i> Logout
                             </button>
@@ -98,8 +126,27 @@
             </div>
         </header>
 
+        <div id="notification-drawer" class="notification-drawer hidden fixed inset-0 z-50" aria-hidden="true">
+            <div class="notification-drawer-backdrop absolute inset-0 bg-gray-900/45 backdrop-blur-sm" onclick="window.app.closeNotificationDrawer()"></div>
+            <section id="notification-drawer-panel" class="notification-drawer-panel absolute left-0 right-0 top-0 mx-auto w-full max-w-md bg-white rounded-b-3xl shadow-2xl border-b border-gray-100 overflow-hidden">
+                <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mt-3 mb-2"></div>
+                <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">Notifications</h2>
+                        <p class="text-[10px] text-gray-400 font-semibold">Swipe up/down or tap outside to close</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.app.markAllNotificationsRead()" class="text-[10px] font-bold text-blue-500 uppercase tracking-wide border border-blue-100 px-2 py-1 rounded">Read All</button>
+                        <button onclick="window.app.clearNotifications()" class="text-[10px] font-bold text-red-500 uppercase tracking-wide border border-red-100 px-2 py-1 rounded">Clear</button>
+                        <button onclick="window.app.closeNotificationDrawer()" class="w-7 h-7 rounded-full bg-gray-100 text-gray-500"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+                <div id="notifications-list" class="max-h-[72vh] overflow-y-auto overscroll-contain p-4 space-y-3"></div>
+            </section>
+        </div>
+
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto mt-14 mb-16 px-4 py-4 w-full max-w-md mx-auto">
+        <main id="main-scroll" class="flex-1 overflow-y-auto mt-14 mb-16 px-4 py-4 pb-28 w-full max-w-md mx-auto mobile-scroll-safe">
 
             <!-- VIEW: HOME (Dashboard) -->
             <section id="view-home" class="view-section">
@@ -118,6 +165,25 @@
                             <p class="text-[10px] text-gray-400 uppercase tracking-wider">Expense (This Month)</p>
                             <p class="text-red-400 font-semibold text-sm" id="home-month-expense">- ₹0.00</p>
                         </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">True Net Worth</p>
+                        <p class="text-base font-bold text-gray-800" id="home-true-net-worth">₹0.00</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Investments</p>
+                        <p class="text-base font-bold text-green-700" id="home-investment-value">₹0.00</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Liabilities</p>
+                        <p class="text-base font-bold text-red-600" id="home-liabilities">₹0.00</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Goals Funded</p>
+                        <p class="text-base font-bold text-blue-700" id="home-goals-progress">0%</p>
                     </div>
                 </div>
 
@@ -281,7 +347,13 @@
             <section id="view-reports" class="view-section">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold text-gray-800">Monthly Reports</h2>
-                    <input type="month" id="report-month" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-sm font-bold outline-none text-gray-700">
+                    <div class="flex items-center gap-2">
+                        <button onclick="window.app.exportTransactionsCSV()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-primary">CSV</button>
+                        <button onclick="window.app.exportReportPDF()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-blue-600">PDF</button>
+                        <button onclick="window.app.exportYearlyTaxReport()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-orange-600">Tax</button>
+                        <button onclick="window.app.exportAccountantTaxCSV()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-purple-600">Tax CSV</button>
+                        <input type="month" id="report-month" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-sm font-bold outline-none text-gray-700">
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-6">
@@ -297,6 +369,14 @@
                         <p class="text-xs text-blue-800 font-bold uppercase tracking-wider">Net Savings</p>
                         <p class="text-xl font-bold text-blue-700" id="rep-savings">₹0</p>
                     </div>
+                    <div class="bg-purple-50 p-4 rounded-xl border border-purple-100 flex flex-col justify-center">
+                        <p class="text-[10px] text-purple-600 font-bold uppercase tracking-wider mb-1">Investments</p>
+                        <p class="text-xl font-bold text-purple-700" id="rep-investments">₹0</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
+                        <p class="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">True Net Worth</p>
+                        <p class="text-xl font-bold text-gray-800" id="rep-true-net-worth">₹0</p>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -305,15 +385,27 @@
                         <p class="text-sm text-gray-500 text-center py-4">No data for selected month</p>
                     </div>
                 </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mt-4">
+                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-4">Budget & Investment Charts</h3>
+                    <div id="advanced-report-charts" class="space-y-4">
+                        <p class="text-sm text-gray-500 text-center py-4">No planning data yet</p>
+                    </div>
+                </div>
             </section>
 
             <!-- VIEW: ACCOUNTS & DEBTS -->
             <section id="view-accounts" class="view-section">
-                <div class="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg mb-5">
-                    <button type="button" onclick="window.app.setVaultTab('accounts')" id="btn-vault-accounts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary">Accounts</button>
-                    <button type="button" onclick="window.app.setVaultTab('debts')" id="btn-vault-debts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Debts</button>
-                    <button type="button" onclick="window.app.setVaultTab('emis')" id="btn-vault-emis" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">EMIs</button>
-                </div>
+                <div class="vault-layout flex gap-3 items-start">
+                    <aside class="vault-sidebar sticky top-16 shrink-0 w-24 bg-white border border-gray-100 rounded-2xl shadow-sm p-1.5 space-y-1">
+                        <button type="button" onclick="window.app.setVaultTab('accounts')" id="btn-vault-accounts" class="vault-tab active"><i class="fa-solid fa-wallet"></i><span>Accounts</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('debts')" id="btn-vault-debts" class="vault-tab"><i class="fa-solid fa-hand-holding-dollar"></i><span>Debts</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('emis')" id="btn-vault-emis" class="vault-tab"><i class="fa-solid fa-calendar-check"></i><span>EMIs</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('budgets')" id="btn-vault-budgets" class="vault-tab"><i class="fa-solid fa-chart-simple"></i><span>Budget</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('wealth')" id="btn-vault-wealth" class="vault-tab"><i class="fa-solid fa-coins"></i><span>Wealth</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('goals')" id="btn-vault-goals" class="vault-tab"><i class="fa-solid fa-bullseye"></i><span>Goals</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('family')" id="btn-vault-family" class="vault-tab"><i class="fa-solid fa-users"></i><span>Family</span></button>
+                    </aside>
+                    <div class="vault-content flex-1 min-w-0">
 
                 <div id="vault-accounts-panel" class="vault-panel mb-8">
                     <div class="flex justify-between items-center mb-4">
@@ -349,16 +441,53 @@
                     </div>
                     <div id="emi-list" class="space-y-3"></div>
                 </div>
+
+                <div id="vault-budgets-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Budgets</h2>
+                        <button onclick="window.app.addBudget()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Budget</button>
+                    </div>
+                    <div id="budget-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-wealth-panel" class="vault-panel hidden">
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <button onclick="window.app.addInvestment()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-2 rounded-lg border border-green-100">+ Investment</button>
+                        <button onclick="window.app.addAsset()" class="text-blue-600 font-bold text-xs uppercase tracking-wide bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">+ Asset</button>
+                        <button onclick="window.app.addLiability()" class="text-red-600 font-bold text-xs uppercase tracking-wide bg-red-50 px-3 py-2 rounded-lg border border-red-100 col-span-2">+ Liability</button>
+                    </div>
+                    <div id="wealth-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-goals-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Goals</h2>
+                        <button onclick="window.app.addGoal()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Goal</button>
+                    </div>
+                    <div id="goal-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-family-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Family Access</h2>
+                        <div class="flex gap-2">
+                            <button onclick="window.app.applyFamilySharing()" class="text-blue-600 font-bold text-xs uppercase tracking-wide bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">Apply</button>
+                            <button onclick="window.app.addFamilyMember()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add</button>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-3">Track family members and roles before enabling shared access rules.</p>
+                    <div id="family-list" class="space-y-3"></div>
+                    <div class="mt-5 pt-4 border-t border-gray-100">
+                        <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">Shared With Me</h3>
+                        <div id="shared-with-me-list" class="space-y-3"></div>
+                    </div>
+                </div>
+                    </div>
+                </div>
             </section>
 
-            <!-- VIEW: NOTIFICATIONS -->
-            <section id="view-notifications" class="view-section">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-gray-800">Notifications</h2>
-                    <button onclick="window.app.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
-                </div>
-                <div id="notifications-list" class="space-y-3"></div>
-            </section>
+            <!-- Notifications are rendered in the top drawer outside the main page flow. -->
+            <section id="view-notifications" class="view-section hidden" aria-hidden="true"></section>
         </main>
 
         <!-- Bottom Navigation -->
@@ -466,6 +595,18 @@
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full text-sm shadow-lg z-50 transition-opacity duration-300 opacity-0 pointer-events-none flex items-center gap-2">
         <i class="fa-solid fa-circle-check text-green-400"></i> <span id="toast-msg">Message</span>
+    </div>
+    <input type="file" id="backup-import-file" accept="application/json" class="hidden">
+
+    <div id="modal-planning" class="app-modal fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="planning-modal-title">Add Item</h3>
+            <form id="planning-form" class="space-y-3"></form>
+            <div class="flex gap-3 mt-5">
+                <button onclick="window.app.hideModal('modal-planning')" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
+                <button onclick="window.app.savePlanningRecord()" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+            </div>
+        </div>
     </div>
 
     <!-- PWA Registration -->

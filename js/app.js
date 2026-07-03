@@ -5,13 +5,28 @@ let appState = {
     transactions: [],
     notifications: [],
     scheduledEmis: [],
+    budgets: [],
+    investments: [],
+    assets: [],
+    liabilities: [],
+    goals: [],
+    familyMembers: [],
+    sharedPlanning: { budgets: [], investments: [], assets: [], liabilities: [], goals: [] },
+    chartInstances: {},
+    generatedRecurringKeys: new Set(),
+    planningModal: null,
     generatedDebtReminderKeys: new Set(),
     activeTxnFilter: 'all',
     editingTransactionId: null,
     editingOriginalType: null,
     editingAccountId: null,
-    editingEmiId: null
+    editingEmiId: null,
+    currentTab: 'home',
+    suppressHistoryPush: false,
+    notificationTouchStartY: 0
 };
+
+const t = (key) => window.i18n?.t?.(key) || key;
 
 const escapeHtml = (value = '') => String(value)
     .replaceAll('&', '&amp;')
@@ -33,14 +48,25 @@ const closeAddSheet = () => {
     resetRecordForm();
 };
 
-const switchTab = (tabId) => {
+const switchTab = (tabId, options = {}) => {
+    if (tabId === 'notifications') {
+        openNotificationDrawer();
+        return;
+    }
+
     if (tabId === 'add') {
         openAddSheet();
         return;
     }
 
     closeAllActionMenus();
+    closeNotificationDrawer();
     closeAddSheet();
+    const previousTab = appState.currentTab;
+    if (!options.fromHistory && previousTab && previousTab !== tabId && ['home', 'transactions', 'reports', 'accounts'].includes(tabId)) {
+        history.pushState({ tab: tabId }, '', `#${tabId}`);
+    }
+    appState.currentTab = tabId;
     document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
     document.getElementById(`view-${tabId}`).classList.add('active');
     
@@ -68,6 +94,30 @@ const showToast = (msg) => {
     setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 3000);
 };
 
+const setSyncStatus = (status = 'synced') => {
+    const wrapper = document.getElementById('sync-status');
+    const dot = document.getElementById('sync-status-dot');
+    const text = document.getElementById('sync-status-text');
+    if (!wrapper || !dot || !text) return;
+
+    const states = {
+        synced: ['Synced', 'bg-green-500', 'text-green-700', 'bg-green-50'],
+        offline: ['Offline', 'bg-orange-500', 'text-orange-700', 'bg-orange-50'],
+        pending: ['Saving', 'bg-blue-500', 'text-blue-700', 'bg-blue-50'],
+        error: ['Sync error', 'bg-red-500', 'text-red-700', 'bg-red-50']
+    };
+    const [label, dotClass, textClass, bgClass] = states[status] || states.synced;
+    wrapper.className = `flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${bgClass} ${textClass}`;
+    dot.className = `w-2 h-2 rounded-full ${dotClass}`;
+    text.innerText = label;
+};
+
+const updateSyncStatusFromSnapshot = (metadata = {}) => {
+    if (!navigator.onLine) return setSyncStatus('offline');
+    if (metadata.hasPendingWrites) return setSyncStatus('pending');
+    setSyncStatus(metadata.fromCache ? 'offline' : 'synced');
+};
+
 // --- Data Fetching & Core Logic ---
 const initAfterAuth = (user) => {
     appState.user = user;
@@ -81,13 +131,15 @@ const initAfterAuth = (user) => {
     }
     
     // Listen to Accounts
-    window.db.listenToData(user.uid, 'accounts', (data) => {
+    window.db.listenToData(user.uid, 'accounts', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         appState.accounts = data;
         updateAccountsUI();
     });
 
     // Listen to Transactions
-    window.db.listenToData(user.uid, 'transactions', (data) => {
+    window.db.listenToData(user.uid, 'transactions', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         // Sort data locally by date descending
         appState.transactions = data.sort((a, b) => new Date(b.date) - new Date(a.date));
         updateDashboard();
@@ -97,18 +149,44 @@ const initAfterAuth = (user) => {
     });
 
     // Listen to scheduled EMIs and bills
-    window.db.listenToData(user.uid, 'scheduled_emis', (data) => {
+    window.db.listenToData(user.uid, 'scheduled_emis', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         appState.scheduledEmis = data.sort((a, b) => Number(a.dueDay || 0) - Number(b.dueDay || 0));
         updateDashboard();
         renderEmis();
     });
 
     // Listen to Notifications
-    window.db.listenToData(user.uid, 'notifications', (data) => {
+    window.db.listenToData(user.uid, 'notifications', (data, metadata) => {
+        updateSyncStatusFromSnapshot(metadata);
         appState.notifications = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         updateNotificationsUI();
         updateDashboard();
     });
+
+    ['budgets', 'investments', 'assets', 'liabilities', 'goals', 'family_members'].forEach((collectionName) => {
+        window.db.listenToData(user.uid, collectionName, (data, metadata) => {
+            updateSyncStatusFromSnapshot(metadata);
+            const stateKey = collectionName === 'family_members' ? 'familyMembers' : collectionName;
+            appState[stateKey] = data.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+            updateDashboard();
+            renderWealthModules();
+            if (collectionName === 'investments') processAutomaticRecurringInvestments();
+            if(document.getElementById('view-reports').classList.contains('active')) renderReports();
+        });
+    });
+
+    if (user.email && window.db.listenToSharedData) {
+        ['budgets', 'investments', 'assets', 'liabilities', 'goals'].forEach((collectionName) => {
+            window.db.listenToSharedData(user.email, collectionName, (data, metadata) => {
+                updateSyncStatusFromSnapshot(metadata);
+                appState.sharedPlanning[collectionName] = data
+                    .filter((item) => item.userId !== user.uid)
+                    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+                renderWealthModules();
+            });
+        });
+    }
 
     // Setup initial dates
     document.getElementById('form-date').valueAsDate = new Date();
@@ -129,10 +207,54 @@ const updateAccountsUI = () => {
     updateSuggestions();
     updateDashboard();
     renderEmis();
+    renderWealthModules();
+    processAutomaticRecurringInvestments();
+};
+
+const sumBy = (items, field) => items.reduce((total, item) => total + (parseFloat(item[field]) || 0), 0);
+
+const getWealthStats = () => {
+    const investmentValue = sumBy(appState.investments, 'currentValue');
+    const investmentCost = sumBy(appState.investments, 'invested');
+    const investmentIncome = sumBy(appState.investments, 'income');
+    const assetValue = sumBy(appState.assets, 'value');
+    const liabilityValue = sumBy(appState.liabilities, 'balance');
+    const goalTarget = sumBy(appState.goals, 'target');
+    const goalSaved = sumBy(appState.goals, 'saved');
+    const cashStats = window.calc.processTransactions(appState.transactions, appState.accounts);
+    const trueNetWorth = cashStats.netWorth + investmentValue + assetValue - liabilityValue;
+
+    return {
+        investmentValue,
+        investmentCost,
+        investmentGain: investmentValue - investmentCost,
+        investmentIncome,
+        assetValue,
+        liabilityValue,
+        goalTarget,
+        goalSaved,
+        trueNetWorth
+    };
+};
+
+const updateWealthDashboard = () => {
+    const stats = getWealthStats();
+    const setText = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) element.innerText = value;
+    };
+
+    setText('home-true-net-worth', `₹${stats.trueNetWorth.toFixed(2)}`);
+    setText('home-investment-value', `₹${stats.investmentValue.toFixed(2)}`);
+    setText('home-liabilities', `₹${stats.liabilityValue.toFixed(2)}`);
+    setText('home-goals-progress', stats.goalTarget ? `${((stats.goalSaved / stats.goalTarget) * 100).toFixed(0)}%` : '0%');
+    setText('rep-investments', `₹${stats.investmentValue.toFixed(2)}`);
+    setText('rep-true-net-worth', `₹${stats.trueNetWorth.toFixed(2)}`);
 };
 
 const updateDashboard = () => {
     const stats = window.calc.processTransactions(appState.transactions, appState.accounts);
+    updateWealthDashboard();
     
     document.getElementById('home-net-balance').innerText = `₹${stats.netWorth.toFixed(2)}`;
     document.getElementById('home-month-income').innerText = `+ ₹${stats.currentMonthIncome.toFixed(2)}`;
@@ -316,6 +438,240 @@ const populateTransactionFilters = () => {
 
 const applyTxnFilters = () => renderTxnList(appState.activeTxnFilter);
 
+const csvEscape = (value = '') => {
+    const text = String(value ?? '');
+    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+};
+
+
+const downloadCsv = (filename, rows) => {
+    const headers = Object.keys(rows[0] || {});
+    const csv = [
+        headers.join(','),
+        ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const exportTransactionsCSV = () => {
+    const reportMonth = document.getElementById('view-reports')?.classList.contains('active')
+        ? document.getElementById('report-month')?.value
+        : '';
+    const rows = reportMonth
+        ? appState.transactions.filter((transaction) => transaction.date?.startsWith(reportMonth))
+        : getFilteredTransactions(appState.activeTxnFilter);
+    if (!rows.length) return showToast(t('noTransactionsToExport'));
+
+    const accountName = (id) => appState.accounts.find((account) => account.id === id)?.name || '';
+    const headers = ['date', 'type', 'amount', 'category', 'from_account', 'to_account', 'note', 'phone', 'whatsapp', 'dueDate'];
+    const csv = [
+        headers.join(','),
+        ...rows.map((transaction) => [
+            transaction.date,
+            transaction.type,
+            transaction.amount,
+            transaction.category,
+            accountName(transaction.from_account),
+            accountName(transaction.to_account),
+            transaction.note,
+            transaction.phone,
+            transaction.whatsapp,
+            transaction.dueDate
+        ].map(csvEscape).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const month = reportMonth || document.getElementById('filter-month')?.value || 'all';
+    link.href = url;
+    link.download = `fintrack-transactions-${month}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast(t('csvDownloaded'));
+};
+
+const exportReportPDF = () => {
+    const month = document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7);
+    const report = window.calc.generateMonthlyReport(appState.transactions, month);
+    const lines = report.sortedCategories.map((item) => `
+        <tr><td>${escapeHtml(item.name)}</td><td style="text-align:right">₹${item.amount.toFixed(2)}</td></tr>
+    `).join('');
+    const popup = window.open('', '_blank', 'width=720,height=900');
+    if (!popup) return showToast(t('popupBlocked'));
+
+    popup.document.write(`
+        <!doctype html>
+        <html>
+        <head>
+            <title>FinTrack Report ${month}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 32px; color: #111827; }
+                h1 { margin-bottom: 4px; }
+                .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
+                .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+                th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+                @media print { button { display: none; } }
+            </style>
+        </head>
+        <body>
+            <button onclick="window.print()">Save as PDF / Print</button>
+            <h1>FinTrack Monthly Report</h1>
+            <p>Month: ${escapeHtml(month)}</p>
+            <div class="cards">
+                <div class="card"><strong>Income</strong><br>₹${report.income.toFixed(2)}</div>
+                <div class="card"><strong>Expense</strong><br>₹${report.expense.toFixed(2)}</div>
+                <div class="card"><strong>Savings</strong><br>₹${report.savings.toFixed(2)}</div>
+            </div>
+            <h2>Expense Breakdown</h2>
+            <table><thead><tr><th>Category</th><th style="text-align:right">Amount</th></tr></thead><tbody>${lines || '<tr><td colspan="2">No data</td></tr>'}</tbody></table>
+            <script>window.onload = () => window.print();<\/script>
+        </body>
+        </html>
+    `);
+    popup.document.close();
+    showToast(t('pdfReady'));
+};
+
+const getTaxCategory = (transaction) => {
+    const text = `${transaction.category || ''} ${transaction.note || ''}`.toLowerCase();
+    if (/(salary|business|interest|dividend|rent|bonus)/.test(text)) return 'Taxable income';
+    if (/(medical|insurance|lic|pf|nps|tuition|school|donation)/.test(text)) return 'Potential deductions';
+    if (/(investment|mutual|stock|gold|sip|fd|rd)/.test(text)) return 'Investments/capital';
+    return transaction.type === 'income' ? 'Other income' : 'Other expenses';
+};
+
+const exportYearlyTaxReport = () => {
+    const year = (document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7)).slice(0, 4);
+    const yearlyTransactions = appState.transactions.filter((transaction) => transaction.date?.startsWith(year));
+    const income = yearlyTransactions.filter((item) => item.type === 'income').reduce((total, item) => total + (parseFloat(item.amount) || 0), 0);
+    const expense = yearlyTransactions.filter((item) => item.type === 'expense').reduce((total, item) => total + (parseFloat(item.amount) || 0), 0);
+    const passiveIncome = sumBy(appState.investments, 'income');
+    const investmentValue = sumBy(appState.investments, 'currentValue');
+    const investmentCost = sumBy(appState.investments, 'invested');
+    const taxBuckets = yearlyTransactions.reduce((buckets, transaction) => {
+        const key = getTaxCategory(transaction);
+        buckets[key] = (buckets[key] || 0) + (parseFloat(transaction.amount) || 0);
+        return buckets;
+    }, {});
+    const taxRows = Object.entries(taxBuckets).map(([name, amount]) => `<tr><th>${escapeHtml(name)}</th><td>₹${amount.toFixed(2)}</td></tr>`).join('');
+    const popup = window.open('', '_blank', 'width=720,height=900');
+    if (!popup) return showToast(t('popupBlocked'));
+
+    popup.document.write(`
+        <!doctype html>
+        <html>
+        <head>
+            <title>FinTrack Tax Summary ${year}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 32px; color: #111827; }
+                table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+                th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+                @media print { button { display: none; } }
+            </style>
+        </head>
+        <body>
+            <button onclick="window.print()">Save as PDF / Print</button>
+            <h1>FinTrack Yearly Tax Summary</h1>
+            <p>Year: ${escapeHtml(year)}</p>
+            <table>
+                <tr><th>Total income recorded</th><td>₹${income.toFixed(2)}</td></tr>
+                <tr><th>Total expenses recorded</th><td>₹${expense.toFixed(2)}</td></tr>
+                <tr><th>Passive income tracked</th><td>₹${passiveIncome.toFixed(2)}</td></tr>
+                <tr><th>Investment cost</th><td>₹${investmentCost.toFixed(2)}</td></tr>
+                <tr><th>Investment current value</th><td>₹${investmentValue.toFixed(2)}</td></tr>
+                <tr><th>Unrealized investment gain/loss</th><td>₹${(investmentValue - investmentCost).toFixed(2)}</td></tr>
+                ${taxRows}
+            </table>
+            <p style="font-size:12px;color:#6b7280;margin-top:24px;">This is a personal summary, not tax advice. Verify with a tax professional.</p>
+            <script>window.onload = () => window.print();<\/script>
+        </body>
+        </html>
+    `);
+    popup.document.close();
+    showToast(t('pdfReady'));
+};
+
+
+const getIndianTaxSection = (transaction) => {
+    const text = `${transaction.category || ''} ${transaction.note || ''}`.toLowerCase();
+    if (/(lic|ppf|pf|elss|tuition|school|principal|80c)/.test(text)) return '80C - common deduction bucket';
+    if (/(health insurance|medical insurance|mediclaim|80d)/.test(text)) return '80D - health insurance bucket';
+    if (/(home loan interest|housing loan interest|24b|24\(b\))/.test(text)) return 'Section 24(b) - home loan interest bucket';
+    if (/(donation|80g)/.test(text)) return '80G - donation bucket';
+    if (/(hra|house rent|rent paid)/.test(text)) return 'HRA/rent documentation bucket';
+    if (/(interest|fd|rd|savings bank)/.test(text)) return 'Interest income bucket';
+    if (/(dividend)/.test(text)) return 'Dividend income bucket';
+    if (/(stock|mutual|sip|elss|capital gain|gold|crypto)/.test(text)) return 'Capital/investment bucket';
+    if (transaction.type === 'income') return 'General income bucket';
+    return 'General expense bucket';
+};
+
+const exportAccountantTaxCSV = () => {
+    const year = (document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7)).slice(0, 4);
+    const accountById = Object.fromEntries(appState.accounts.map((account) => [account.id, account.name]));
+    const rows = appState.transactions
+        .filter((transaction) => transaction.date?.startsWith(year))
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map((transaction) => ({
+            Date: transaction.date || '',
+            Type: transaction.type || '',
+            Category: transaction.category || '',
+            TaxBucket: getTaxCategory(transaction),
+            LocalTaxSection: getIndianTaxSection(transaction),
+            Amount: (parseFloat(transaction.amount) || 0).toFixed(2),
+            Account: accountById[transaction.from_account] || accountById[transaction.to_account] || '',
+            Note: transaction.note || '',
+            Person: transaction.person || ''
+        }));
+    if (!rows.length) return showToast('No tax transactions for selected year.');
+    downloadCsv(`fintrack-accountant-tax-${year}.csv`, rows);
+    showToast('Accountant tax CSV exported. Verify with a tax professional.');
+};
+
+const downloadJson = (filename, payload) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
+const exportBackupJSON = () => {
+    downloadJson(`fintrack-backup-${new Date().toISOString().slice(0, 10)}.json`, {
+        exportedAt: new Date().toISOString(),
+        version: 1,
+        accounts: appState.accounts,
+        transactions: appState.transactions,
+        scheduled_emis: appState.scheduledEmis,
+        notifications: appState.notifications,
+        budgets: appState.budgets,
+        investments: appState.investments,
+        assets: appState.assets,
+        liabilities: appState.liabilities,
+        goals: appState.goals,
+        family_members: appState.familyMembers
+    });
+    showToast(t('backupDownloaded'));
+};
+
+const openBackupImport = () => document.getElementById('backup-import-file')?.click();
+
 // --- Form & Input Handling ---
 const setupAddForm = () => {
     const fromSelect = document.getElementById('form-from-account');
@@ -399,6 +755,30 @@ const typeToFormType = (type) => {
     return type;
 };
 
+const isValidIsoDate = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const validateRecordForm = ({ rawType, finalType, amount, category, date, fromAccount, toAccount, reminderDays }) => {
+    if (!Number.isFinite(amount) || amount <= 0) return 'Please enter an amount greater than zero.';
+    if (!isValidIsoDate(date)) return 'Please select a valid date.';
+    if (rawType !== 'transfer' && !category.trim()) {
+        return rawType === 'debt' ? "Please enter the person's name." : 'Please enter a category/source.';
+    }
+    if (['expense', 'transfer'].includes(rawType) || ['loan_given', 'debt_paid'].includes(finalType)) {
+        if (!fromAccount) return 'Please select the account money is paid from.';
+    }
+    if (['income', 'transfer'].includes(rawType) || ['loan_taken', 'debt_received'].includes(finalType)) {
+        if (!toAccount) return 'Please select the account money is received into.';
+    }
+    if (rawType === 'transfer' && fromAccount === toAccount) return 'Transfer accounts must be different.';
+    if (rawType === 'debt' && (reminderDays < 0 || reminderDays > 365)) return 'Reminder days must be between 0 and 365.';
+    return '';
+};
+
 const editTransaction = (transactionId) => {
     const transaction = appState.transactions.find((item) => item.id === transactionId);
     if (!transaction) return showToast('Transaction not found');
@@ -457,12 +837,26 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
         finalType = appState.editingOriginalType;
     }
 
+    const amount = parseFloat(document.getElementById('form-amount').value);
+    const category = document.getElementById('form-category').value.trim();
+    const date = document.getElementById('form-date').value;
+    const fromAccount = document.getElementById('form-from-account').value;
+    const toAccount = document.getElementById('form-to-account').value;
+    const reminderDays = parseInt(document.getElementById('form-debt-reminder-days').value, 10) || 0;
+    const validationError = validateRecordForm({ rawType, finalType, amount, category, date, fromAccount, toAccount, reminderDays });
+
+    if (validationError) {
+        showToast(validationError);
+        btn.innerHTML = appState.editingTransactionId ? 'Update Record' : 'Save Record';
+        return;
+    }
+
     const data = {
         userId: appState.user.uid,
         type: finalType,
-        amount: parseFloat(document.getElementById('form-amount').value),
-        category: document.getElementById('form-category').value,
-        date: document.getElementById('form-date').value,
+        amount,
+        category: rawType === 'transfer' ? 'Transfer' : category,
+        date,
         note: document.getElementById('form-note').value,
         timestamp: appState.editingTransactionId
             ? (appState.transactions.find((item) => item.id === appState.editingTransactionId)?.timestamp || new Date().toISOString())
@@ -471,16 +865,16 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
     };
 
     if(rawType === 'expense' || rawType === 'transfer' || finalType === 'loan_given' || finalType === 'debt_paid') {
-        data.from_account = document.getElementById('form-from-account').value;
+        data.from_account = fromAccount;
     }
     if(rawType === 'income' || rawType === 'transfer' || finalType === 'loan_taken' || finalType === 'debt_received') {
-        data.to_account = document.getElementById('form-to-account').value;
+        data.to_account = toAccount;
     }
     if (rawType === 'debt') {
         data.phone = document.getElementById('form-debt-phone').value.trim();
         data.whatsapp = document.getElementById('form-debt-whatsapp').value.trim();
         data.dueDate = document.getElementById('form-debt-due-date').value;
-        data.reminderDays = parseInt(document.getElementById('form-debt-reminder-days').value, 10) || 0;
+        data.reminderDays = reminderDays;
     }
 
     try {
@@ -505,6 +899,8 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
 const renderReports = () => {
     const month = document.getElementById('report-month').value;
     const report = window.calc.generateMonthlyReport(appState.transactions, month);
+    updateWealthDashboard();
+    renderAdvancedCharts(month);
 
     document.getElementById('rep-income').innerText = `₹${report.income.toFixed(2)}`;
     document.getElementById('rep-expense').innerText = `₹${report.expense.toFixed(2)}`;
@@ -787,11 +1183,44 @@ const settleDebt = async () => {
     }
 };
 
+
+const openNotificationDrawer = () => {
+    updateNotificationsUI();
+    const drawer = document.getElementById('notification-drawer');
+    if (!drawer) return;
+    drawer.classList.remove('hidden');
+    drawer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden');
+    requestAnimationFrame(() => drawer.classList.add('open'));
+};
+
+const closeNotificationDrawer = () => {
+    const drawer = document.getElementById('notification-drawer');
+    if (!drawer || drawer.classList.contains('hidden')) return;
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('overflow-hidden');
+    setTimeout(() => drawer.classList.add('hidden'), 240);
+};
+
 const clearNotifications = async () => {
-    if (!confirm('Clear all notifications?')) return;
     await window.db.clearNotifications(appState.user.uid);
 };
 
+const markAllNotificationsRead = async () => {
+    await window.db.markAllNotificationsRead(appState.user.uid);
+};
+
+const openNotificationTarget = (notification) => {
+    if (notification.transactionId && notification.type === 'debt_reminder') {
+        const transaction = appState.transactions.find((item) => item.id === notification.transactionId);
+        if (transaction?.category) {
+            showDebtDetails(transaction.category);
+            return;
+        }
+    }
+    openNotificationDrawer();
+};
 
 const closeAllActionMenus = () => {
     document.querySelectorAll('.action-menu').forEach((menu) => menu.classList.add('hidden'));
@@ -803,7 +1232,23 @@ const toggleActionMenu = (kind, id) => {
     if (!menu) return;
     const wasHidden = menu.classList.contains('hidden');
     closeAllActionMenus();
-    if (wasHidden) menu.classList.remove('hidden');
+    if (!wasHidden) return;
+
+    menu.classList.remove('hidden');
+    const trigger = menu.parentElement?.querySelector('[title^="More"]');
+    const rect = trigger?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = 8;
+    menu.style.position = 'fixed';
+    menu.style.right = `${Math.max(window.innerWidth - rect.right, margin)}px`;
+    menu.style.left = 'auto';
+    menu.style.top = `${rect.bottom + 4}px`;
+    requestAnimationFrame(() => {
+        const menuRect = menu.getBoundingClientRect();
+        if (menuRect.bottom > window.innerHeight - margin) {
+            menu.style.top = `${Math.max(rect.top - menuRect.height - 4, margin)}px`;
+        }
+    });
 };
 
 document.addEventListener('click', (event) => {
@@ -811,6 +1256,22 @@ document.addEventListener('click', (event) => {
         closeAllActionMenus();
     }
 });
+
+window.addEventListener('online', () => setSyncStatus('synced'));
+window.addEventListener('offline', () => setSyncStatus('offline'));
+window.addEventListener('popstate', () => {
+    const tab = location.hash.replace('#', '') || 'home';
+    if (['home', 'transactions', 'reports', 'accounts'].includes(tab)) switchTab(tab, { fromHistory: true });
+});
+
+const drawerPanel = document.getElementById('notification-drawer-panel');
+drawerPanel?.addEventListener('touchstart', (event) => {
+    appState.notificationTouchStartY = event.touches[0].clientY;
+}, { passive: true });
+drawerPanel?.addEventListener('touchend', (event) => {
+    const deltaY = event.changedTouches[0].clientY - appState.notificationTouchStartY;
+    if (Math.abs(deltaY) > 60) closeNotificationDrawer();
+}, { passive: true });
 
 const getCurrentMonthKey = () => new Date().toISOString().slice(0, 7);
 
@@ -899,15 +1360,408 @@ const renderActionCenter = (stats) => {
     wrapper.classList.toggle('hidden', !pendingEmis.length && !debtAlerts.length && !dueDebtAlerts.length);
 };
 
+const renderSimpleRows = (containerId, rows, emptyText, renderer) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = rows.length ? rows.map(renderer).join('') : `<p class="text-xs text-gray-500 text-center bg-white rounded-xl border border-gray-100 p-4">${emptyText}</p>`;
+};
+
+const getBudgetSpent = (budget) => {
+    const month = /^\d{4}-\d{2}$/.test(budget.month || '') ? budget.month : new Date().toISOString().slice(0, 7);
+    return appState.transactions
+        .filter((transaction) => transaction.type === 'expense' && transaction.date?.startsWith(month) && transaction.category?.toLowerCase() === budget.category?.toLowerCase())
+        .reduce((total, transaction) => total + (parseFloat(transaction.amount) || 0), 0);
+};
+
+const getMonthSeries = (endMonth, count = 6) => {
+    const [year, month] = endMonth.split('-').map(Number);
+    const end = new Date(year, month - 1, 1);
+    return Array.from({ length: count }, (_, index) => {
+        const date = new Date(end.getFullYear(), end.getMonth() - (count - index - 1), 1);
+        return date.toISOString().slice(0, 7);
+    });
+};
+
+const destroyChart = (key) => {
+    if (appState.chartInstances[key]) {
+        appState.chartInstances[key].destroy();
+        delete appState.chartInstances[key];
+    }
+};
+
+const renderFallbackCharts = (container, month) => {
+    const budgetCharts = appState.budgets.map((budget) => {
+        const limit = parseFloat(budget.limit) || 0;
+        const spent = getBudgetSpent({ ...budget, month });
+        const percent = limit ? Math.min((spent / limit) * 100, 100) : 0;
+        return `<div><div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-700">Budget: ${escapeHtml(budget.category)}</span><span class="text-gray-500">₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</span></div><div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div></div>`;
+    });
+    const investmentCharts = appState.investments.map((investment) => {
+        const invested = parseFloat(investment.invested) || 0;
+        const current = parseFloat(investment.currentValue) || 0;
+        const gain = current - invested;
+        const percent = invested ? Math.max(Math.min((current / invested) * 100, 160), 0) : 0;
+        return `<div><div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-700">Investment: ${escapeHtml(investment.name)}</span><span class="${gain >= 0 ? 'text-green-600' : 'text-red-600'}">Gain ₹${gain.toFixed(2)}</span></div><div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${gain >= 0 ? 'bg-purple-500' : 'bg-red-500'} rounded-full" style="width:${percent}%"></div></div></div>`;
+    });
+    container.innerHTML = [...budgetCharts, ...investmentCharts].join('') || '<p class="text-sm text-gray-500 text-center py-4">No planning data yet</p>';
+};
+
+const renderAdvancedCharts = (month = new Date().toISOString().slice(0, 7)) => {
+    const container = document.getElementById('advanced-report-charts');
+    if (!container) return;
+    if (!window.Chart) return renderFallbackCharts(container, month);
+
+    const months = getMonthSeries(month, 6);
+    const budgetLimitByMonth = months.map((seriesMonth) => appState.budgets.reduce((total, budget) => {
+        const applies = !budget.month || budget.month === 'Monthly' || budget.month === seriesMonth;
+        return applies ? total + (parseFloat(budget.limit) || 0) : total;
+    }, 0));
+    const expenseByMonth = months.map((seriesMonth) => appState.transactions
+        .filter((transaction) => transaction.type === 'expense' && transaction.date?.startsWith(seriesMonth))
+        .reduce((total, transaction) => total + (parseFloat(transaction.amount) || 0), 0));
+
+    const investmentLabels = appState.investments.map((investment) => investment.name || investment.type || 'Investment');
+    const investedData = appState.investments.map((investment) => parseFloat(investment.invested) || 0);
+    const currentValueData = appState.investments.map((investment) => parseFloat(investment.currentValue) || 0);
+
+    container.innerHTML = `
+        <div>
+            <p class="text-xs font-bold text-gray-700 mb-2">6-month budget history</p>
+            <canvas id="budget-history-chart" height="180" aria-label="Budget history chart"></canvas>
+        </div>
+        <div>
+            <p class="text-xs font-bold text-gray-700 mb-2">Investment cost vs current value</p>
+            <canvas id="investment-performance-chart" height="180" aria-label="Investment performance chart"></canvas>
+        </div>
+    `;
+
+    destroyChart('budgetHistory');
+    destroyChart('investmentPerformance');
+    appState.chartInstances.budgetHistory = new Chart(document.getElementById('budget-history-chart'), {
+        type: 'line',
+        data: { labels: months, datasets: [
+            { label: 'Expenses', data: expenseByMonth, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', tension: 0.35, fill: true },
+            { label: 'Budget limit', data: budgetLimitByMonth, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.10)', tension: 0.35, fill: true }
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+    });
+    appState.chartInstances.investmentPerformance = new Chart(document.getElementById('investment-performance-chart'), {
+        type: 'bar',
+        data: { labels: investmentLabels.length ? investmentLabels : ['No investments'], datasets: [
+            { label: 'Invested', data: investedData.length ? investedData : [0], backgroundColor: '#a78bfa' },
+            { label: 'Current value', data: currentValueData.length ? currentValueData : [0], backgroundColor: '#10b981' }
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+    });
+};
+
+const renderWealthModules = () => {
+    renderSimpleRows('budget-list', appState.budgets, 'No budgets added.', (item) => {
+        const limit = parseFloat(item.limit) || 0;
+        const spent = getBudgetSpent(item);
+        const percent = limit ? Math.min((spent / limit) * 100, 100) : 0;
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <p class="text-sm font-bold text-gray-800">${escapeHtml(item.category)}</p>
+                        <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.month || 'Monthly')} • Spent ₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</p>
+                    </div>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="window.app.editPlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                        <button onclick="window.app.deletePlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                    </div>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div>
+            </div>
+        `;
+    });
+
+    const wealthRows = [
+        ...appState.investments.map((item) => ({ ...item, collection: 'investments', label: item.type || 'Investment', amount: item.currentValue, color: 'text-purple-700' })),
+        ...appState.assets.map((item) => ({ ...item, collection: 'assets', label: item.type || 'Asset', amount: item.value, color: 'text-blue-700' })),
+        ...appState.liabilities.map((item) => ({ ...item, collection: 'liabilities', label: item.type || 'Liability', amount: item.balance, color: 'text-red-600' }))
+    ];
+    renderSimpleRows('wealth-list', wealthRows, 'No investments, assets, or liabilities added.', (item) => `
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+            <div>
+                <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
+                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.label)}${item.income ? ` • Income ₹${(parseFloat(item.income) || 0).toFixed(2)}` : ''}${item.sipAmount ? ` • SIP ₹${(parseFloat(item.sipAmount) || 0).toFixed(2)} ${escapeHtml(item.frequency || 'Monthly')}` : ''}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-bold ${item.color}">₹${(parseFloat(item.amount) || 0).toFixed(2)}</p>
+                <div class="flex gap-2 justify-end">
+                    ${item.collection === 'investments' && item.sipAmount ? `<button onclick="window.app.generateRecurringInvestment('${item.id}')" class="text-[10px] font-bold text-green-600">SIP</button>` : ''}
+                    <button onclick="window.app.editPlanningRecord('${item.collection}', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                    <button onclick="window.app.deletePlanningRecord('${item.collection}', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                </div>
+            </div>
+        </div>
+    `);
+
+    renderSimpleRows('goal-list', appState.goals, 'No goals added.', (item) => {
+        const target = parseFloat(item.target) || 0;
+        const saved = parseFloat(item.saved) || 0;
+        const percent = target ? Math.min((saved / target) * 100, 100) : 0;
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
+                        <p class="text-[10px] text-gray-400 font-semibold">₹${saved.toFixed(2)} / ₹${target.toFixed(2)}</p>
+                    </div>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="window.app.editPlanningRecord('goals', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                        <button onclick="window.app.deletePlanningRecord('goals', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                    </div>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 bg-primary rounded-full" style="width:${percent}%"></div></div>
+            </div>
+        `;
+    });
+
+    renderSimpleRows('family-list', appState.familyMembers, 'No family members added.', (item) => `
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+            <div>
+                <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
+                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.email)} • ${escapeHtml(item.role || 'Viewer')}</p>
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button onclick="window.app.editPlanningRecord('family_members', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                <button onclick="window.app.deletePlanningRecord('family_members', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+            </div>
+        </div>
+    `);
+
+
+    const sharedRows = Object.entries(appState.sharedPlanning || {}).flatMap(([collectionName, rows]) =>
+        rows.map((item) => ({ ...item, collectionName }))
+    );
+    renderSimpleRows('shared-with-me-list', sharedRows, 'No shared family records received yet.', (item) => `
+        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+            <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name || item.category || item.type || 'Shared record')}</p>
+            <p class="text-[10px] text-blue-700 font-semibold uppercase tracking-wide">${escapeHtml(item.collectionName.replace('_', ' '))} • Owner ${escapeHtml(item.userId || 'Family')}</p>
+            <p class="text-[10px] text-gray-500 mt-1">Read-only collaborative view. Ask the owner to edit shared values.</p>
+        </div>
+    `);
+};
+
+const planningConfigs = {
+    budgets: {
+        title: 'Budget',
+        fields: [
+            { key: 'category', label: 'Budget category', defaultValue: 'Food', required: true },
+            { key: 'month', label: 'Month (YYYY-MM or Monthly)', defaultValue: new Date().toISOString().slice(0, 7) },
+            { key: 'limit', label: 'Budget limit amount', type: 'number', required: true }
+        ]
+    },
+    investments: {
+        title: 'Investment',
+        fields: [
+            { key: 'name', label: 'Investment name', defaultValue: 'Mutual Fund', required: true },
+            { key: 'type', label: 'Type', defaultValue: 'Mutual Fund' },
+            { key: 'invested', label: 'Total invested amount', type: 'number' },
+            { key: 'currentValue', label: 'Current value', type: 'number', required: true },
+            { key: 'income', label: 'Dividend/interest/rent income', type: 'number' },
+            { key: 'sipAmount', label: 'Recurring SIP/contribution amount', type: 'number' },
+            { key: 'frequency', label: 'Frequency', defaultValue: 'Monthly' },
+            { key: 'autoGenerate', label: 'Auto-generate monthly SIP? (Yes/No)', defaultValue: 'No' },
+            { key: 'dayOfMonth', label: 'Auto SIP day of month', type: 'number', defaultValue: 1 }
+        ]
+    },
+    assets: {
+        title: 'Asset',
+        fields: [
+            { key: 'name', label: 'Asset name', defaultValue: 'Gold', required: true },
+            { key: 'type', label: 'Type', defaultValue: 'Gold' },
+            { key: 'value', label: 'Current value', type: 'number', required: true }
+        ]
+    },
+    liabilities: {
+        title: 'Liability',
+        fields: [
+            { key: 'name', label: 'Liability name', defaultValue: 'Credit Card', required: true },
+            { key: 'type', label: 'Type', defaultValue: 'Loan' },
+            { key: 'balance', label: 'Outstanding balance', type: 'number', required: true }
+        ]
+    },
+    goals: {
+        title: 'Goal',
+        fields: [
+            { key: 'name', label: 'Goal name', defaultValue: 'Emergency Fund', required: true },
+            { key: 'target', label: 'Target amount', type: 'number', required: true },
+            { key: 'saved', label: 'Saved amount', type: 'number' }
+        ]
+    },
+    family_members: {
+        title: 'Family Member',
+        fields: [
+            { key: 'name', label: 'Member name', required: true },
+            { key: 'email', label: 'Email', required: true },
+            { key: 'role', label: 'Role', defaultValue: 'Viewer' }
+        ]
+    }
+};
+
+const getPlanningRows = (collectionName) => {
+    if (collectionName === 'family_members') return appState.familyMembers;
+    return appState[collectionName] || [];
+};
+
+const getFamilyShareEmails = () => appState.familyMembers
+    .map((member) => (member.email || '').trim().toLowerCase())
+    .filter(Boolean);
+
+const openPlanningModal = (collectionName, title, fields, existingRecord = null) => {
+    appState.planningModal = { collectionName, fields, editingId: existingRecord?.id || null };
+    document.getElementById('planning-modal-title').innerText = title;
+    document.getElementById('planning-form').innerHTML = fields.map((field) => `
+        <label class="block">
+            <span class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">${escapeHtml(field.label)}</span>
+            <input
+                type="${field.type === 'number' ? 'number' : 'text'}"
+                step="${field.type === 'number' ? '0.01' : ''}"
+                data-planning-field="${field.key}"
+                ${field.required ? 'required' : ''}
+                value="${escapeHtml(existingRecord?.[field.key] ?? field.defaultValue ?? '')}"
+                class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium"
+            >
+        </label>
+    `).join('');
+    showModal('modal-planning');
+};
+
+const savePlanningRecord = async () => {
+    if (!appState.user || !appState.planningModal) return;
+    const { collectionName, fields, editingId } = appState.planningModal;
+    const existingRecord = editingId ? getPlanningRows(collectionName).find((item) => item.id === editingId) : null;
+    const data = {
+        userId: appState.user.uid,
+        createdAt: existingRecord?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sharedWith: getFamilyShareEmails()
+    };
+
+    for (const field of fields) {
+        const input = document.querySelector(`[data-planning-field="${field.key}"]`);
+        const value = input?.value || '';
+        data[field.key] = field.type === 'number' ? parseFloat(value) || 0 : value.trim();
+        if (field.required && !data[field.key]) return showToast(`${field.label} is required`);
+    }
+
+    if (editingId) await window.db.updateRecord(collectionName, editingId, data);
+    else await window.db.addRecord(collectionName, data);
+    hideModal('modal-planning');
+    showToast('Saved successfully');
+};
+
+const openPlanningConfig = (collectionName, existingRecord = null) => {
+    const config = planningConfigs[collectionName];
+    openPlanningModal(collectionName, `${existingRecord ? 'Edit' : 'Add'} ${config.title}`, config.fields, existingRecord);
+};
+
+const addBudget = () => openPlanningConfig('budgets');
+const addInvestment = () => openPlanningConfig('investments');
+const addAsset = () => openPlanningConfig('assets');
+const addLiability = () => openPlanningConfig('liabilities');
+const addGoal = () => openPlanningConfig('goals');
+const addFamilyMember = () => openPlanningConfig('family_members');
+
+const editPlanningRecord = (collectionName, docId) => {
+    const record = getPlanningRows(collectionName).find((item) => item.id === docId);
+    if (!record) return showToast('Item not found');
+    openPlanningConfig(collectionName, record);
+};
+
+const applyFamilySharing = async () => {
+    const sharedWith = getFamilyShareEmails();
+    const collections = ['budgets', 'investments', 'assets', 'liabilities', 'goals'];
+    await Promise.all(collections.flatMap((collectionName) =>
+        getPlanningRows(collectionName).map((item) => window.db.updateRecord(collectionName, item.id, { sharedWith, updatedAt: new Date().toISOString() }))
+    ));
+    showToast('Family sharing emails applied to planning records.');
+};
+
+const generateRecurringInvestment = async (investmentId) => {
+    const investment = appState.investments.find((item) => item.id === investmentId);
+    const amount = parseFloat(investment?.sipAmount) || 0;
+    if (!investment || amount <= 0) return showToast('No SIP amount configured.');
+    const accountId = appState.accounts[0]?.id;
+    if (!accountId) return showToast('Create an account before generating SIP transaction.');
+    if (!confirm(`Create SIP transaction for ${investment.name} worth ₹${amount.toFixed(2)} from ${appState.accounts[0].name}?`)) return;
+
+    await window.db.addRecord('transactions', {
+        userId: appState.user.uid,
+        type: 'expense',
+        amount,
+        category: `Investment - ${investment.name}`,
+        from_account: accountId,
+        date: new Date().toISOString().slice(0, 10),
+        note: `${investment.frequency || 'Monthly'} recurring contribution`,
+        investmentId,
+        timestamp: new Date().toISOString()
+    });
+    await window.db.updateRecord('investments', investmentId, {
+        invested: (parseFloat(investment.invested) || 0) + amount,
+        currentValue: (parseFloat(investment.currentValue) || 0) + amount,
+        lastContributionAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sharedWith: getFamilyShareEmails()
+    });
+    showToast('SIP transaction generated.');
+};
+
+
+const processAutomaticRecurringInvestments = async () => {
+    if (!appState.user || !appState.accounts.length) return;
+    const today = new Date();
+    const currentMonth = today.toISOString().slice(0, 7);
+    for (const investment of appState.investments) {
+        const amount = parseFloat(investment.sipAmount) || 0;
+        const shouldAutoGenerate = String(investment.autoGenerate || '').toLowerCase() === 'yes';
+        const dueDay = Math.min(Math.max(parseInt(investment.dayOfMonth || 1, 10) || 1, 1), 28);
+        const key = `${investment.id}-${currentMonth}`;
+        if (!shouldAutoGenerate || amount <= 0 || investment.lastContributionMonth === currentMonth || today.getDate() < dueDay || appState.generatedRecurringKeys.has(key)) continue;
+        appState.generatedRecurringKeys.add(key);
+        const account = appState.accounts[0];
+        await window.db.addRecord('transactions', {
+            userId: appState.user.uid,
+            type: 'expense',
+            amount,
+            category: `Investment - ${investment.name}`,
+            from_account: account.id,
+            date: today.toISOString().slice(0, 10),
+            note: `Automatic ${investment.frequency || 'Monthly'} SIP contribution`,
+            investmentId: investment.id,
+            recurringGenerated: true,
+            timestamp: today.toISOString()
+        });
+        await window.db.updateRecord('investments', investment.id, {
+            invested: (parseFloat(investment.invested) || 0) + amount,
+            currentValue: (parseFloat(investment.currentValue) || 0) + amount,
+            lastContributionMonth: currentMonth,
+            lastContributionAt: today.toISOString(),
+            updatedAt: today.toISOString(),
+            sharedWith: getFamilyShareEmails()
+        });
+        window.db.addNotification?.(appState.user.uid, 'Auto SIP generated', `${investment.name}: ₹${amount.toFixed(2)} added from ${account.name}`);
+    }
+};
+
+const deletePlanningRecord = async (collectionName, docId) => {
+    if (!confirm('Delete this item?')) return;
+    await window.db.deleteRecord(collectionName, docId);
+    showToast('Deleted');
+};
+
 const setVaultTab = (tab) => {
     appState.vaultTab = tab;
-    ['accounts', 'debts', 'emis'].forEach((item) => {
+    ['accounts', 'debts', 'emis', 'budgets', 'wealth', 'goals', 'family'].forEach((item) => {
         document.getElementById(`vault-${item}-panel`)?.classList.toggle('hidden', item !== tab);
         const btn = document.getElementById(`btn-vault-${item}`);
         if (!btn) return;
-        btn.className = item === tab
-            ? 'vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary'
-            : 'vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500';
+        btn.classList.toggle('active', item === tab);
+        btn.setAttribute('aria-current', item === tab ? 'page' : 'false');
     });
 };
 
@@ -1095,6 +1949,7 @@ const updateNotificationsUI = () => {
     }
 
     const list = document.getElementById('notifications-list');
+    if (!list) return;
     list.innerHTML = '';
     
     if(appState.notifications.length === 0) {
@@ -1105,7 +1960,7 @@ const updateNotificationsUI = () => {
     appState.notifications.forEach(n => {
         const date = new Date(n.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
         list.innerHTML += `
-            <div onclick="window.app.markNotificationRead('${n.id}')" class="bg-white p-3 rounded-xl border ${n.read ? 'border-gray-100' : 'border-blue-200 bg-blue-50'} shadow-sm cursor-pointer">
+            <div onclick="window.app.openNotification('${n.id}')" class="bg-white p-3 rounded-xl border ${n.read ? 'border-gray-100' : 'border-blue-200 bg-blue-50'} shadow-sm cursor-pointer">
                 <p class="text-sm font-bold text-gray-800">${escapeHtml(n.title)}</p>
                 <p class="text-xs text-gray-600 mt-1">${escapeHtml(n.message)}</p>
                 <p class="text-[9px] text-gray-400 mt-2">${date}</p>
@@ -1126,6 +1981,43 @@ const markNotificationRead = async (notificationId) => {
     }
 };
 
+const openNotification = async (notificationId) => {
+    const notification = appState.notifications.find((item) => item.id === notificationId);
+    if (!notification) return;
+    await markNotificationRead(notificationId);
+    openNotificationTarget(notification);
+};
+
+document.getElementById('backup-import-file')?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !appState.user) return;
+
+    try {
+        const backup = JSON.parse(await file.text());
+        const collections = ['accounts', 'transactions', 'scheduled_emis', 'budgets', 'investments', 'assets', 'liabilities', 'goals', 'family_members'];
+        let imported = 0;
+
+        for (const collectionName of collections) {
+            const rows = Array.isArray(backup[collectionName]) ? backup[collectionName] : [];
+            for (const row of rows) {
+                const { id, ...data } = row;
+                await window.db.addRecord(collectionName, {
+                    ...data,
+                    userId: appState.user.uid,
+                    importedAt: new Date().toISOString()
+                });
+                imported += 1;
+            }
+        }
+
+        showToast(imported ? t('backupImportDone') : t('backupImportEmpty'));
+    } catch (error) {
+        console.error('Backup import error', error);
+        showToast('Backup import failed.');
+    }
+});
+
 // Global Exports for HTML inline handlers
 window.app = { 
     initAfterAuth, 
@@ -1143,16 +2035,39 @@ window.app = {
     showDebtDetails,
     settleDebt,
     clearNotifications,
+    openNotificationDrawer,
+    closeNotificationDrawer,
+    markAllNotificationsRead,
+    exportBackupJSON,
+    openBackupImport,
     closeAddSheet,
     toggleActionMenu,
     applyTxnFilters,
+    exportTransactionsCSV,
+    exportReportPDF,
+    exportYearlyTaxReport,
+    exportAccountantTaxCSV,
     setVaultTab,
+    addBudget,
+    addInvestment,
+    addAsset,
+    addLiability,
+    addGoal,
+    addFamilyMember,
+    savePlanningRecord,
+    editPlanningRecord,
+    applyFamilySharing,
+    generateRecurringInvestment,
+    processAutomaticRecurringInvestments,
+    deletePlanningRecord,
     resetEmiModal,
     saveEmi,
     editEmi,
     deleteEmi,
     markEmiPaid,
     markNotificationRead,
+    openNotification,
+    setSyncStatus,
     filterTxns: (type) => {
         appState.activeTxnFilter = type;
         document.querySelectorAll('.filter-btn').forEach(btn => {
