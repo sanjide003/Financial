@@ -5,6 +5,11 @@ let appState = {
     transactions: [],
     notifications: [],
     scheduledEmis: [],
+    budgets: [],
+    investments: [],
+    assets: [],
+    liabilities: [],
+    goals: [],
     generatedDebtReminderKeys: new Set(),
     activeTxnFilter: 'all',
     editingTransactionId: null,
@@ -140,6 +145,16 @@ const initAfterAuth = (user) => {
         updateDashboard();
     });
 
+    ['budgets', 'investments', 'assets', 'liabilities', 'goals'].forEach((collectionName) => {
+        window.db.listenToData(user.uid, collectionName, (data, metadata) => {
+            updateSyncStatusFromSnapshot(metadata);
+            appState[collectionName] = data.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+            updateDashboard();
+            renderWealthModules();
+            if(document.getElementById('view-reports').classList.contains('active')) renderReports();
+        });
+    });
+
     // Setup initial dates
     document.getElementById('form-date').valueAsDate = new Date();
     document.getElementById('report-month').value = new Date().toISOString().slice(0, 7);
@@ -159,10 +174,53 @@ const updateAccountsUI = () => {
     updateSuggestions();
     updateDashboard();
     renderEmis();
+    renderWealthModules();
+};
+
+const sumBy = (items, field) => items.reduce((total, item) => total + (parseFloat(item[field]) || 0), 0);
+
+const getWealthStats = () => {
+    const investmentValue = sumBy(appState.investments, 'currentValue');
+    const investmentCost = sumBy(appState.investments, 'invested');
+    const investmentIncome = sumBy(appState.investments, 'income');
+    const assetValue = sumBy(appState.assets, 'value');
+    const liabilityValue = sumBy(appState.liabilities, 'balance');
+    const goalTarget = sumBy(appState.goals, 'target');
+    const goalSaved = sumBy(appState.goals, 'saved');
+    const cashStats = window.calc.processTransactions(appState.transactions, appState.accounts);
+    const trueNetWorth = cashStats.netWorth + investmentValue + assetValue - liabilityValue;
+
+    return {
+        investmentValue,
+        investmentCost,
+        investmentGain: investmentValue - investmentCost,
+        investmentIncome,
+        assetValue,
+        liabilityValue,
+        goalTarget,
+        goalSaved,
+        trueNetWorth
+    };
+};
+
+const updateWealthDashboard = () => {
+    const stats = getWealthStats();
+    const setText = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) element.innerText = value;
+    };
+
+    setText('home-true-net-worth', `₹${stats.trueNetWorth.toFixed(2)}`);
+    setText('home-investment-value', `₹${stats.investmentValue.toFixed(2)}`);
+    setText('home-liabilities', `₹${stats.liabilityValue.toFixed(2)}`);
+    setText('home-goals-progress', stats.goalTarget ? `${((stats.goalSaved / stats.goalTarget) * 100).toFixed(0)}%` : '0%');
+    setText('rep-investments', `₹${stats.investmentValue.toFixed(2)}`);
+    setText('rep-true-net-worth', `₹${stats.trueNetWorth.toFixed(2)}`);
 };
 
 const updateDashboard = () => {
     const stats = window.calc.processTransactions(appState.transactions, appState.accounts);
+    updateWealthDashboard();
     
     document.getElementById('home-net-balance').innerText = `₹${stats.netWorth.toFixed(2)}`;
     document.getElementById('home-month-income').innerText = `+ ₹${stats.currentMonthIncome.toFixed(2)}`;
@@ -453,7 +511,12 @@ const exportBackupJSON = () => {
         accounts: appState.accounts,
         transactions: appState.transactions,
         scheduled_emis: appState.scheduledEmis,
-        notifications: appState.notifications
+        notifications: appState.notifications,
+        budgets: appState.budgets,
+        investments: appState.investments,
+        assets: appState.assets,
+        liabilities: appState.liabilities,
+        goals: appState.goals
     });
     showToast(t('backupDownloaded'));
 };
@@ -687,6 +750,7 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
 const renderReports = () => {
     const month = document.getElementById('report-month').value;
     const report = window.calc.generateMonthlyReport(appState.transactions, month);
+    updateWealthDashboard();
 
     document.getElementById('rep-income').innerText = `₹${report.income.toFixed(2)}`;
     document.getElementById('rep-expense').innerText = `₹${report.expense.toFixed(2)}`;
@@ -1098,9 +1162,117 @@ const renderActionCenter = (stats) => {
     wrapper.classList.toggle('hidden', !pendingEmis.length && !debtAlerts.length && !dueDebtAlerts.length);
 };
 
+const renderSimpleRows = (containerId, rows, emptyText, renderer) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = rows.length ? rows.map(renderer).join('') : `<p class="text-xs text-gray-500 text-center bg-white rounded-xl border border-gray-100 p-4">${emptyText}</p>`;
+};
+
+const renderWealthModules = () => {
+    renderSimpleRows('budget-list', appState.budgets, 'No budgets added.', (item) => `
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+            <div>
+                <p class="text-sm font-bold text-gray-800">${escapeHtml(item.category)}</p>
+                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.month || 'Monthly')} budget</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-bold text-primary">₹${(parseFloat(item.limit) || 0).toFixed(2)}</p>
+                <button onclick="window.app.deletePlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+            </div>
+        </div>
+    `);
+
+    const wealthRows = [
+        ...appState.investments.map((item) => ({ ...item, collection: 'investments', label: item.type || 'Investment', amount: item.currentValue, color: 'text-purple-700' })),
+        ...appState.assets.map((item) => ({ ...item, collection: 'assets', label: item.type || 'Asset', amount: item.value, color: 'text-blue-700' })),
+        ...appState.liabilities.map((item) => ({ ...item, collection: 'liabilities', label: item.type || 'Liability', amount: item.balance, color: 'text-red-600' }))
+    ];
+    renderSimpleRows('wealth-list', wealthRows, 'No investments, assets, or liabilities added.', (item) => `
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+            <div>
+                <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
+                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.label)}${item.income ? ` • Income ₹${(parseFloat(item.income) || 0).toFixed(2)}` : ''}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-bold ${item.color}">₹${(parseFloat(item.amount) || 0).toFixed(2)}</p>
+                <button onclick="window.app.deletePlanningRecord('${item.collection}', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+            </div>
+        </div>
+    `);
+
+    renderSimpleRows('goal-list', appState.goals, 'No goals added.', (item) => {
+        const target = parseFloat(item.target) || 0;
+        const saved = parseFloat(item.saved) || 0;
+        const percent = target ? Math.min((saved / target) * 100, 100) : 0;
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
+                        <p class="text-[10px] text-gray-400 font-semibold">₹${saved.toFixed(2)} / ₹${target.toFixed(2)}</p>
+                    </div>
+                    <button onclick="window.app.deletePlanningRecord('goals', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 bg-primary rounded-full" style="width:${percent}%"></div></div>
+            </div>
+        `;
+    });
+};
+
+const addPlanningRecord = async (collectionName, fields) => {
+    if (!appState.user) return;
+    const data = { userId: appState.user.uid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    for (const field of fields) {
+        const value = prompt(field.label, field.defaultValue || '');
+        if (value === null) return;
+        data[field.key] = field.type === 'number' ? parseFloat(value) || 0 : value.trim();
+        if (field.required && !data[field.key]) return showToast(`${field.label} is required`);
+    }
+    await window.db.addRecord(collectionName, data);
+    showToast('Saved successfully');
+};
+
+const addBudget = () => addPlanningRecord('budgets', [
+    { key: 'category', label: 'Budget category', defaultValue: 'Food', required: true },
+    { key: 'month', label: 'Month (YYYY-MM or Monthly)', defaultValue: new Date().toISOString().slice(0, 7) },
+    { key: 'limit', label: 'Budget limit amount', type: 'number', required: true }
+]);
+
+const addInvestment = () => addPlanningRecord('investments', [
+    { key: 'name', label: 'Investment name', defaultValue: 'Mutual Fund', required: true },
+    { key: 'type', label: 'Type', defaultValue: 'Mutual Fund' },
+    { key: 'invested', label: 'Total invested amount', type: 'number' },
+    { key: 'currentValue', label: 'Current value', type: 'number', required: true },
+    { key: 'income', label: 'Dividend/interest/rent income', type: 'number' }
+]);
+
+const addAsset = () => addPlanningRecord('assets', [
+    { key: 'name', label: 'Asset name', defaultValue: 'Gold', required: true },
+    { key: 'type', label: 'Type', defaultValue: 'Gold' },
+    { key: 'value', label: 'Current value', type: 'number', required: true }
+]);
+
+const addLiability = () => addPlanningRecord('liabilities', [
+    { key: 'name', label: 'Liability name', defaultValue: 'Credit Card', required: true },
+    { key: 'type', label: 'Type', defaultValue: 'Loan' },
+    { key: 'balance', label: 'Outstanding balance', type: 'number', required: true }
+]);
+
+const addGoal = () => addPlanningRecord('goals', [
+    { key: 'name', label: 'Goal name', defaultValue: 'Emergency Fund', required: true },
+    { key: 'target', label: 'Target amount', type: 'number', required: true },
+    { key: 'saved', label: 'Saved amount', type: 'number' }
+]);
+
+const deletePlanningRecord = async (collectionName, docId) => {
+    if (!confirm('Delete this item?')) return;
+    await window.db.deleteRecord(collectionName, docId);
+    showToast('Deleted');
+};
+
 const setVaultTab = (tab) => {
     appState.vaultTab = tab;
-    ['accounts', 'debts', 'emis'].forEach((item) => {
+    ['accounts', 'debts', 'emis', 'budgets', 'wealth', 'goals'].forEach((item) => {
         document.getElementById(`vault-${item}-panel`)?.classList.toggle('hidden', item !== tab);
         const btn = document.getElementById(`btn-vault-${item}`);
         if (!btn) return;
@@ -1339,7 +1511,7 @@ document.getElementById('backup-import-file')?.addEventListener('change', async 
 
     try {
         const backup = JSON.parse(await file.text());
-        const collections = ['accounts', 'transactions', 'scheduled_emis'];
+        const collections = ['accounts', 'transactions', 'scheduled_emis', 'budgets', 'investments', 'assets', 'liabilities', 'goals'];
         let imported = 0;
 
         for (const collectionName of collections) {
@@ -1388,6 +1560,12 @@ window.app = {
     exportTransactionsCSV,
     exportReportPDF,
     setVaultTab,
+    addBudget,
+    addInvestment,
+    addAsset,
+    addLiability,
+    addGoal,
+    deletePlanningRecord,
     resetEmiModal,
     saveEmi,
     editEmi,

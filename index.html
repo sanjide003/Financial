@@ -147,6 +147,25 @@
                     </div>
                 </div>
 
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">True Net Worth</p>
+                        <p class="text-base font-bold text-gray-800" id="home-true-net-worth">₹0.00</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Investments</p>
+                        <p class="text-base font-bold text-green-700" id="home-investment-value">₹0.00</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Liabilities</p>
+                        <p class="text-base font-bold text-red-600" id="home-liabilities">₹0.00</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Goals Funded</p>
+                        <p class="text-base font-bold text-blue-700" id="home-goals-progress">0%</p>
+                    </div>
+                </div>
+
                 <!-- EMI Alerts (Dynamic) -->
                 <div id="home-alerts" class="mb-6 hidden">
                     <h3 class="text-sm font-bold text-red-600 uppercase tracking-wide mb-2 flex items-center gap-2">
@@ -327,6 +346,14 @@
                         <p class="text-xs text-blue-800 font-bold uppercase tracking-wider">Net Savings</p>
                         <p class="text-xl font-bold text-blue-700" id="rep-savings">₹0</p>
                     </div>
+                    <div class="bg-purple-50 p-4 rounded-xl border border-purple-100 flex flex-col justify-center">
+                        <p class="text-[10px] text-purple-600 font-bold uppercase tracking-wider mb-1">Investments</p>
+                        <p class="text-xl font-bold text-purple-700" id="rep-investments">₹0</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center">
+                        <p class="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">True Net Worth</p>
+                        <p class="text-xl font-bold text-gray-800" id="rep-true-net-worth">₹0</p>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -343,6 +370,9 @@
                     <button type="button" onclick="window.app.setVaultTab('accounts')" id="btn-vault-accounts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary">Accounts</button>
                     <button type="button" onclick="window.app.setVaultTab('debts')" id="btn-vault-debts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Debts</button>
                     <button type="button" onclick="window.app.setVaultTab('emis')" id="btn-vault-emis" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">EMIs</button>
+                    <button type="button" onclick="window.app.setVaultTab('budgets')" id="btn-vault-budgets" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Budget</button>
+                    <button type="button" onclick="window.app.setVaultTab('wealth')" id="btn-vault-wealth" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Wealth</button>
+                    <button type="button" onclick="window.app.setVaultTab('goals')" id="btn-vault-goals" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Goals</button>
                 </div>
 
                 <div id="vault-accounts-panel" class="vault-panel mb-8">
@@ -378,6 +408,31 @@
                         <button onclick="window.app.resetEmiModal(); window.app.showModal('modal-emi')" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add EMI</button>
                     </div>
                     <div id="emi-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-budgets-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Budgets</h2>
+                        <button onclick="window.app.addBudget()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Budget</button>
+                    </div>
+                    <div id="budget-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-wealth-panel" class="vault-panel hidden">
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <button onclick="window.app.addInvestment()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-2 rounded-lg border border-green-100">+ Investment</button>
+                        <button onclick="window.app.addAsset()" class="text-blue-600 font-bold text-xs uppercase tracking-wide bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">+ Asset</button>
+                        <button onclick="window.app.addLiability()" class="text-red-600 font-bold text-xs uppercase tracking-wide bg-red-50 px-3 py-2 rounded-lg border border-red-100 col-span-2">+ Liability</button>
+                    </div>
+                    <div id="wealth-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-goals-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Goals</h2>
+                        <button onclick="window.app.addGoal()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Goal</button>
+                    </div>
+                    <div id="goal-list" class="space-y-3"></div>
                 </div>
             </section>
 

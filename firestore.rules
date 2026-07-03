@@ -37,6 +37,31 @@ service cloud.firestore {
       allow create: if ownsIncomingUserData();
     }
 
+    match /budgets/{budgetId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /investments/{investmentId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /assets/{assetId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /liabilities/{liabilityId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
+    match /goals/{goalId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

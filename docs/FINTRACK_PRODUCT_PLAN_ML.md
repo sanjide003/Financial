@@ -44,10 +44,17 @@
 - Debt aging.
 - Yearly tax-ready summary.
 
+## Implemented in current repo
+- Budget records with monthly/category limit.
+- Investment records with invested amount, current value, and passive income.
+- Asset records and liability records.
+- Goal records with target/saved progress.
+- Dashboard true net worth, investment value, liabilities, and goal progress cards.
+- Reports investment and true net worth summary cards.
+
 ## Next implementation order
-1. Stabilize auth and Firestore writes.
-2. Add budget module.
-3. Add investment module.
-4. Split cash net worth and true net worth.
-5. Add goals module.
-6. Add advanced reports/dashboard widgets.
+1. Add edit forms for budget/investment/asset/liability/goal instead of prompt-based entry.
+2. Add charts for budget usage, investment growth, and goals.
+3. Add recurring SIP/interest/dividend automation.
+4. Add yearly tax-ready summary.
+5. Add family sharing/permissions if needed.
