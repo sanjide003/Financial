@@ -64,3 +64,12 @@ This runs JavaScript syntax checks, JSON validation, unit tests, and static E2E 
 ## Current status
 
 See `docs/STATUS_ML.md` for completed work and the remaining production-readiness roadmap. Use `docs/DEPLOYMENT_ML.md` and `docs/VERCEL_PUBLISH_ML.md` for release steps, `docs/PRIVACY_SECURITY_ML.md` for security/privacy notes, and the policy/audit docs for launch readiness.
+
+## App logo replacement
+
+For the installed PWA icon and browser icon, replace these files with your final logo using the same names and folder:
+
+- `icons/icon-192.svg` — 192×192 app icon.
+- `icons/icon-512.svg` — 512×512 app icon / splash-quality icon.
+
+Use a square logo with safe padding. Keeping the same filenames avoids code changes because `manifest.json` already points to these paths.

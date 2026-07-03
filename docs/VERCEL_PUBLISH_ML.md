@@ -33,3 +33,12 @@ firebase deploy --only firestore:rules,firestore:indexes
 
 ## Vercel-ൽ publish ആകേണ്ട runtime files മാത്രം
 Vercel deployment-ൽ പ്രധാനമായി വേണ്ടത് `index.html`, `manifest.json`, `sw.js`, `css/`, `icons/`, `js/`, `vercel.json` എന്നിവയാണ്. Firebase rules/indexes repo-ൽ നിലനിർത്തിയിട്ടുണ്ട്, പക്ഷേ അവ Vercel static bundle-ൽ publish ചെയ്യേണ്ടതില്ല; Firebase CLI ഉപയോഗിച്ച് deploy ചെയ്യാനുള്ള backend config മാത്രമാണ്.
+
+## App logo replacement
+
+For the installed PWA icon and browser icon, replace these files with your final logo using the same names and folder:
+
+- `icons/icon-192.svg` — 192×192 app icon.
+- `icons/icon-512.svg` — 512×512 app icon / splash-quality icon.
+
+Use a square logo with safe padding. Keeping the same filenames avoids code changes because `manifest.json` already points to these paths.

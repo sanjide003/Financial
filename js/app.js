@@ -20,7 +20,10 @@ let appState = {
     editingTransactionId: null,
     editingOriginalType: null,
     editingAccountId: null,
-    editingEmiId: null
+    editingEmiId: null,
+    currentTab: 'home',
+    suppressHistoryPush: false,
+    notificationTouchStartY: 0
 };
 
 const t = (key) => window.i18n?.t?.(key) || key;
@@ -45,14 +48,25 @@ const closeAddSheet = () => {
     resetRecordForm();
 };
 
-const switchTab = (tabId) => {
+const switchTab = (tabId, options = {}) => {
+    if (tabId === 'notifications') {
+        openNotificationDrawer();
+        return;
+    }
+
     if (tabId === 'add') {
         openAddSheet();
         return;
     }
 
     closeAllActionMenus();
+    closeNotificationDrawer();
     closeAddSheet();
+    const previousTab = appState.currentTab;
+    if (!options.fromHistory && previousTab && previousTab !== tabId && ['home', 'transactions', 'reports', 'accounts'].includes(tabId)) {
+        history.pushState({ tab: tabId }, '', `#${tabId}`);
+    }
+    appState.currentTab = tabId;
     document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
     document.getElementById(`view-${tabId}`).classList.add('active');
     
@@ -1169,8 +1183,27 @@ const settleDebt = async () => {
     }
 };
 
+
+const openNotificationDrawer = () => {
+    updateNotificationsUI();
+    const drawer = document.getElementById('notification-drawer');
+    if (!drawer) return;
+    drawer.classList.remove('hidden');
+    drawer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden');
+    requestAnimationFrame(() => drawer.classList.add('open'));
+};
+
+const closeNotificationDrawer = () => {
+    const drawer = document.getElementById('notification-drawer');
+    if (!drawer || drawer.classList.contains('hidden')) return;
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('overflow-hidden');
+    setTimeout(() => drawer.classList.add('hidden'), 240);
+};
+
 const clearNotifications = async () => {
-    if (!confirm('Clear all notifications?')) return;
     await window.db.clearNotifications(appState.user.uid);
 };
 
@@ -1186,7 +1219,7 @@ const openNotificationTarget = (notification) => {
             return;
         }
     }
-    switchTab('notifications');
+    openNotificationDrawer();
 };
 
 const closeAllActionMenus = () => {
@@ -1199,7 +1232,23 @@ const toggleActionMenu = (kind, id) => {
     if (!menu) return;
     const wasHidden = menu.classList.contains('hidden');
     closeAllActionMenus();
-    if (wasHidden) menu.classList.remove('hidden');
+    if (!wasHidden) return;
+
+    menu.classList.remove('hidden');
+    const trigger = menu.parentElement?.querySelector('[title^="More"]');
+    const rect = trigger?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = 8;
+    menu.style.position = 'fixed';
+    menu.style.right = `${Math.max(window.innerWidth - rect.right, margin)}px`;
+    menu.style.left = 'auto';
+    menu.style.top = `${rect.bottom + 4}px`;
+    requestAnimationFrame(() => {
+        const menuRect = menu.getBoundingClientRect();
+        if (menuRect.bottom > window.innerHeight - margin) {
+            menu.style.top = `${Math.max(rect.top - menuRect.height - 4, margin)}px`;
+        }
+    });
 };
 
 document.addEventListener('click', (event) => {
@@ -1210,6 +1259,19 @@ document.addEventListener('click', (event) => {
 
 window.addEventListener('online', () => setSyncStatus('synced'));
 window.addEventListener('offline', () => setSyncStatus('offline'));
+window.addEventListener('popstate', () => {
+    const tab = location.hash.replace('#', '') || 'home';
+    if (['home', 'transactions', 'reports', 'accounts'].includes(tab)) switchTab(tab, { fromHistory: true });
+});
+
+const drawerPanel = document.getElementById('notification-drawer-panel');
+drawerPanel?.addEventListener('touchstart', (event) => {
+    appState.notificationTouchStartY = event.touches[0].clientY;
+}, { passive: true });
+drawerPanel?.addEventListener('touchend', (event) => {
+    const deltaY = event.changedTouches[0].clientY - appState.notificationTouchStartY;
+    if (Math.abs(deltaY) > 60) closeNotificationDrawer();
+}, { passive: true });
 
 const getCurrentMonthKey = () => new Date().toISOString().slice(0, 7);
 
@@ -1698,9 +1760,8 @@ const setVaultTab = (tab) => {
         document.getElementById(`vault-${item}-panel`)?.classList.toggle('hidden', item !== tab);
         const btn = document.getElementById(`btn-vault-${item}`);
         if (!btn) return;
-        btn.className = item === tab
-            ? 'vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary'
-            : 'vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500';
+        btn.classList.toggle('active', item === tab);
+        btn.setAttribute('aria-current', item === tab ? 'page' : 'false');
     });
 };
 
@@ -1888,6 +1949,7 @@ const updateNotificationsUI = () => {
     }
 
     const list = document.getElementById('notifications-list');
+    if (!list) return;
     list.innerHTML = '';
     
     if(appState.notifications.length === 0) {
@@ -1973,6 +2035,8 @@ window.app = {
     showDebtDetails,
     settleDebt,
     clearNotifications,
+    openNotificationDrawer,
+    closeNotificationDrawer,
     markAllNotificationsRead,
     exportBackupJSON,
     openBackupImport,

@@ -126,8 +126,27 @@
             </div>
         </header>
 
+        <div id="notification-drawer" class="notification-drawer hidden fixed inset-0 z-50" aria-hidden="true">
+            <div class="notification-drawer-backdrop absolute inset-0 bg-gray-900/45 backdrop-blur-sm" onclick="window.app.closeNotificationDrawer()"></div>
+            <section id="notification-drawer-panel" class="notification-drawer-panel absolute left-0 right-0 top-0 mx-auto w-full max-w-md bg-white rounded-b-3xl shadow-2xl border-b border-gray-100 overflow-hidden">
+                <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mt-3 mb-2"></div>
+                <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">Notifications</h2>
+                        <p class="text-[10px] text-gray-400 font-semibold">Swipe up/down or tap outside to close</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.app.markAllNotificationsRead()" class="text-[10px] font-bold text-blue-500 uppercase tracking-wide border border-blue-100 px-2 py-1 rounded">Read All</button>
+                        <button onclick="window.app.clearNotifications()" class="text-[10px] font-bold text-red-500 uppercase tracking-wide border border-red-100 px-2 py-1 rounded">Clear</button>
+                        <button onclick="window.app.closeNotificationDrawer()" class="w-7 h-7 rounded-full bg-gray-100 text-gray-500"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+                <div id="notifications-list" class="max-h-[72vh] overflow-y-auto overscroll-contain p-4 space-y-3"></div>
+            </section>
+        </div>
+
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto mt-14 mb-16 px-4 py-4 w-full max-w-md mx-auto">
+        <main id="main-scroll" class="flex-1 overflow-y-auto mt-14 mb-16 px-4 py-4 pb-28 w-full max-w-md mx-auto mobile-scroll-safe">
 
             <!-- VIEW: HOME (Dashboard) -->
             <section id="view-home" class="view-section">
@@ -376,15 +395,17 @@
 
             <!-- VIEW: ACCOUNTS & DEBTS -->
             <section id="view-accounts" class="view-section">
-                <div class="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg mb-5">
-                    <button type="button" onclick="window.app.setVaultTab('accounts')" id="btn-vault-accounts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md bg-white shadow text-primary">Accounts</button>
-                    <button type="button" onclick="window.app.setVaultTab('debts')" id="btn-vault-debts" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Debts</button>
-                    <button type="button" onclick="window.app.setVaultTab('emis')" id="btn-vault-emis" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">EMIs</button>
-                    <button type="button" onclick="window.app.setVaultTab('budgets')" id="btn-vault-budgets" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Budget</button>
-                    <button type="button" onclick="window.app.setVaultTab('wealth')" id="btn-vault-wealth" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Wealth</button>
-                    <button type="button" onclick="window.app.setVaultTab('goals')" id="btn-vault-goals" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Goals</button>
-                    <button type="button" onclick="window.app.setVaultTab('family')" id="btn-vault-family" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Family</button>
-                </div>
+                <div class="vault-layout flex gap-3 items-start">
+                    <aside class="vault-sidebar sticky top-16 shrink-0 w-24 bg-white border border-gray-100 rounded-2xl shadow-sm p-1.5 space-y-1">
+                        <button type="button" onclick="window.app.setVaultTab('accounts')" id="btn-vault-accounts" class="vault-tab active"><i class="fa-solid fa-wallet"></i><span>Accounts</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('debts')" id="btn-vault-debts" class="vault-tab"><i class="fa-solid fa-hand-holding-dollar"></i><span>Debts</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('emis')" id="btn-vault-emis" class="vault-tab"><i class="fa-solid fa-calendar-check"></i><span>EMIs</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('budgets')" id="btn-vault-budgets" class="vault-tab"><i class="fa-solid fa-chart-simple"></i><span>Budget</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('wealth')" id="btn-vault-wealth" class="vault-tab"><i class="fa-solid fa-coins"></i><span>Wealth</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('goals')" id="btn-vault-goals" class="vault-tab"><i class="fa-solid fa-bullseye"></i><span>Goals</span></button>
+                        <button type="button" onclick="window.app.setVaultTab('family')" id="btn-vault-family" class="vault-tab"><i class="fa-solid fa-users"></i><span>Family</span></button>
+                    </aside>
+                    <div class="vault-content flex-1 min-w-0">
 
                 <div id="vault-accounts-panel" class="vault-panel mb-8">
                     <div class="flex justify-between items-center mb-4">
@@ -461,19 +482,12 @@
                         <div id="shared-with-me-list" class="space-y-3"></div>
                     </div>
                 </div>
-            </section>
-
-            <!-- VIEW: NOTIFICATIONS -->
-            <section id="view-notifications" class="view-section">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-gray-800">Notifications</h2>
-                    <div class="flex gap-2">
-                        <button onclick="window.app.markAllNotificationsRead()" class="text-[10px] font-bold text-blue-500 uppercase tracking-wide border border-blue-100 px-2 py-1 rounded">Read All</button>
-                        <button onclick="window.app.clearNotifications()" class="text-[10px] font-bold text-gray-400 uppercase tracking-wide border border-gray-200 px-2 py-1 rounded">Clear All</button>
                     </div>
                 </div>
-                <div id="notifications-list" class="space-y-3"></div>
             </section>
+
+            <!-- Notifications are rendered in the top drawer outside the main page flow. -->
+            <section id="view-notifications" class="view-section hidden" aria-hidden="true"></section>
         </main>
 
         <!-- Bottom Navigation -->
