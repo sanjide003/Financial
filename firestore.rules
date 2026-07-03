@@ -62,6 +62,11 @@ service cloud.firestore {
       allow create: if ownsIncomingUserData();
     }
 
+    match /family_members/{memberId} {
+      allow read, update, delete: if ownsExistingUserData();
+      allow create: if ownsIncomingUserData();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

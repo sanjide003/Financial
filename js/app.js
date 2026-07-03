@@ -10,6 +10,8 @@ let appState = {
     assets: [],
     liabilities: [],
     goals: [],
+    familyMembers: [],
+    planningModal: null,
     generatedDebtReminderKeys: new Set(),
     activeTxnFilter: 'all',
     editingTransactionId: null,
@@ -145,10 +147,11 @@ const initAfterAuth = (user) => {
         updateDashboard();
     });
 
-    ['budgets', 'investments', 'assets', 'liabilities', 'goals'].forEach((collectionName) => {
+    ['budgets', 'investments', 'assets', 'liabilities', 'goals', 'family_members'].forEach((collectionName) => {
         window.db.listenToData(user.uid, collectionName, (data, metadata) => {
             updateSyncStatusFromSnapshot(metadata);
-            appState[collectionName] = data.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+            const stateKey = collectionName === 'family_members' ? 'familyMembers' : collectionName;
+            appState[stateKey] = data.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
             updateDashboard();
             renderWealthModules();
             if(document.getElementById('view-reports').classList.contains('active')) renderReports();
@@ -492,6 +495,50 @@ const exportReportPDF = () => {
     showToast(t('pdfReady'));
 };
 
+const exportYearlyTaxReport = () => {
+    const year = (document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7)).slice(0, 4);
+    const yearlyTransactions = appState.transactions.filter((transaction) => transaction.date?.startsWith(year));
+    const income = yearlyTransactions.filter((item) => item.type === 'income').reduce((total, item) => total + (parseFloat(item.amount) || 0), 0);
+    const expense = yearlyTransactions.filter((item) => item.type === 'expense').reduce((total, item) => total + (parseFloat(item.amount) || 0), 0);
+    const passiveIncome = sumBy(appState.investments, 'income');
+    const investmentValue = sumBy(appState.investments, 'currentValue');
+    const investmentCost = sumBy(appState.investments, 'invested');
+    const popup = window.open('', '_blank', 'width=720,height=900');
+    if (!popup) return showToast(t('popupBlocked'));
+
+    popup.document.write(`
+        <!doctype html>
+        <html>
+        <head>
+            <title>FinTrack Tax Summary ${year}</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 32px; color: #111827; }
+                table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+                th, td { border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+                @media print { button { display: none; } }
+            </style>
+        </head>
+        <body>
+            <button onclick="window.print()">Save as PDF / Print</button>
+            <h1>FinTrack Yearly Tax Summary</h1>
+            <p>Year: ${escapeHtml(year)}</p>
+            <table>
+                <tr><th>Total income recorded</th><td>₹${income.toFixed(2)}</td></tr>
+                <tr><th>Total expenses recorded</th><td>₹${expense.toFixed(2)}</td></tr>
+                <tr><th>Passive income tracked</th><td>₹${passiveIncome.toFixed(2)}</td></tr>
+                <tr><th>Investment cost</th><td>₹${investmentCost.toFixed(2)}</td></tr>
+                <tr><th>Investment current value</th><td>₹${investmentValue.toFixed(2)}</td></tr>
+                <tr><th>Unrealized investment gain/loss</th><td>₹${(investmentValue - investmentCost).toFixed(2)}</td></tr>
+            </table>
+            <p style="font-size:12px;color:#6b7280;margin-top:24px;">This is a personal summary, not tax advice. Verify with a tax professional.</p>
+            <script>window.onload = () => window.print();<\/script>
+        </body>
+        </html>
+    `);
+    popup.document.close();
+    showToast(t('pdfReady'));
+};
+
 const downloadJson = (filename, payload) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -516,7 +563,8 @@ const exportBackupJSON = () => {
         investments: appState.investments,
         assets: appState.assets,
         liabilities: appState.liabilities,
-        goals: appState.goals
+        goals: appState.goals,
+        family_members: appState.familyMembers
     });
     showToast(t('backupDownloaded'));
 };
@@ -1168,19 +1216,31 @@ const renderSimpleRows = (containerId, rows, emptyText, renderer) => {
     container.innerHTML = rows.length ? rows.map(renderer).join('') : `<p class="text-xs text-gray-500 text-center bg-white rounded-xl border border-gray-100 p-4">${emptyText}</p>`;
 };
 
+const getBudgetSpent = (budget) => {
+    const month = /^\d{4}-\d{2}$/.test(budget.month || '') ? budget.month : new Date().toISOString().slice(0, 7);
+    return appState.transactions
+        .filter((transaction) => transaction.type === 'expense' && transaction.date?.startsWith(month) && transaction.category?.toLowerCase() === budget.category?.toLowerCase())
+        .reduce((total, transaction) => total + (parseFloat(transaction.amount) || 0), 0);
+};
+
 const renderWealthModules = () => {
-    renderSimpleRows('budget-list', appState.budgets, 'No budgets added.', (item) => `
-        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
-            <div>
-                <p class="text-sm font-bold text-gray-800">${escapeHtml(item.category)}</p>
-                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.month || 'Monthly')} budget</p>
+    renderSimpleRows('budget-list', appState.budgets, 'No budgets added.', (item) => {
+        const limit = parseFloat(item.limit) || 0;
+        const spent = getBudgetSpent(item);
+        const percent = limit ? Math.min((spent / limit) * 100, 100) : 0;
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <p class="text-sm font-bold text-gray-800">${escapeHtml(item.category)}</p>
+                        <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.month || 'Monthly')} • Spent ₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</p>
+                    </div>
+                    <button onclick="window.app.deletePlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div>
             </div>
-            <div class="text-right">
-                <p class="text-sm font-bold text-primary">₹${(parseFloat(item.limit) || 0).toFixed(2)}</p>
-                <button onclick="window.app.deletePlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
-            </div>
-        </div>
-    `);
+        `;
+    });
 
     const wealthRows = [
         ...appState.investments.map((item) => ({ ...item, collection: 'investments', label: item.type || 'Investment', amount: item.currentValue, color: 'text-purple-700' })),
@@ -1191,7 +1251,7 @@ const renderWealthModules = () => {
         <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
             <div>
                 <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
-                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.label)}${item.income ? ` • Income ₹${(parseFloat(item.income) || 0).toFixed(2)}` : ''}</p>
+                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.label)}${item.income ? ` • Income ₹${(parseFloat(item.income) || 0).toFixed(2)}` : ''}${item.sipAmount ? ` • SIP ₹${(parseFloat(item.sipAmount) || 0).toFixed(2)} ${escapeHtml(item.frequency || 'Monthly')}` : ''}</p>
             </div>
             <div class="text-right">
                 <p class="text-sm font-bold ${item.color}">₹${(parseFloat(item.amount) || 0).toFixed(2)}</p>
@@ -1217,51 +1277,92 @@ const renderWealthModules = () => {
             </div>
         `;
     });
+
+    renderSimpleRows('family-list', appState.familyMembers, 'No family members added.', (item) => `
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center">
+            <div>
+                <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
+                <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.email)} • ${escapeHtml(item.role || 'Viewer')}</p>
+            </div>
+            <button onclick="window.app.deletePlanningRecord('family_members', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+        </div>
+    `);
 };
 
-const addPlanningRecord = async (collectionName, fields) => {
-    if (!appState.user) return;
+const openPlanningModal = (collectionName, title, fields) => {
+    appState.planningModal = { collectionName, fields };
+    document.getElementById('planning-modal-title').innerText = title;
+    document.getElementById('planning-form').innerHTML = fields.map((field) => `
+        <label class="block">
+            <span class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">${escapeHtml(field.label)}</span>
+            <input
+                type="${field.type === 'number' ? 'number' : 'text'}"
+                step="${field.type === 'number' ? '0.01' : ''}"
+                data-planning-field="${field.key}"
+                ${field.required ? 'required' : ''}
+                value="${escapeHtml(field.defaultValue || '')}"
+                class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium"
+            >
+        </label>
+    `).join('');
+    showModal('modal-planning');
+};
+
+const savePlanningRecord = async () => {
+    if (!appState.user || !appState.planningModal) return;
+    const { collectionName, fields } = appState.planningModal;
     const data = { userId: appState.user.uid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+
     for (const field of fields) {
-        const value = prompt(field.label, field.defaultValue || '');
-        if (value === null) return;
+        const input = document.querySelector(`[data-planning-field="${field.key}"]`);
+        const value = input?.value || '';
         data[field.key] = field.type === 'number' ? parseFloat(value) || 0 : value.trim();
         if (field.required && !data[field.key]) return showToast(`${field.label} is required`);
     }
+
     await window.db.addRecord(collectionName, data);
+    hideModal('modal-planning');
     showToast('Saved successfully');
 };
 
-const addBudget = () => addPlanningRecord('budgets', [
+const addBudget = () => openPlanningModal('budgets', 'Add Budget', [
     { key: 'category', label: 'Budget category', defaultValue: 'Food', required: true },
     { key: 'month', label: 'Month (YYYY-MM or Monthly)', defaultValue: new Date().toISOString().slice(0, 7) },
     { key: 'limit', label: 'Budget limit amount', type: 'number', required: true }
 ]);
 
-const addInvestment = () => addPlanningRecord('investments', [
+const addInvestment = () => openPlanningModal('investments', 'Add Investment', [
     { key: 'name', label: 'Investment name', defaultValue: 'Mutual Fund', required: true },
     { key: 'type', label: 'Type', defaultValue: 'Mutual Fund' },
     { key: 'invested', label: 'Total invested amount', type: 'number' },
     { key: 'currentValue', label: 'Current value', type: 'number', required: true },
-    { key: 'income', label: 'Dividend/interest/rent income', type: 'number' }
+    { key: 'income', label: 'Dividend/interest/rent income', type: 'number' },
+    { key: 'sipAmount', label: 'Recurring SIP/contribution amount', type: 'number' },
+    { key: 'frequency', label: 'Frequency', defaultValue: 'Monthly' }
 ]);
 
-const addAsset = () => addPlanningRecord('assets', [
+const addAsset = () => openPlanningModal('assets', 'Add Asset', [
     { key: 'name', label: 'Asset name', defaultValue: 'Gold', required: true },
     { key: 'type', label: 'Type', defaultValue: 'Gold' },
     { key: 'value', label: 'Current value', type: 'number', required: true }
 ]);
 
-const addLiability = () => addPlanningRecord('liabilities', [
+const addLiability = () => openPlanningModal('liabilities', 'Add Liability', [
     { key: 'name', label: 'Liability name', defaultValue: 'Credit Card', required: true },
     { key: 'type', label: 'Type', defaultValue: 'Loan' },
     { key: 'balance', label: 'Outstanding balance', type: 'number', required: true }
 ]);
 
-const addGoal = () => addPlanningRecord('goals', [
+const addGoal = () => openPlanningModal('goals', 'Add Goal', [
     { key: 'name', label: 'Goal name', defaultValue: 'Emergency Fund', required: true },
     { key: 'target', label: 'Target amount', type: 'number', required: true },
     { key: 'saved', label: 'Saved amount', type: 'number' }
+]);
+
+const addFamilyMember = () => openPlanningModal('family_members', 'Add Family Member', [
+    { key: 'name', label: 'Member name', required: true },
+    { key: 'email', label: 'Email', required: true },
+    { key: 'role', label: 'Role', defaultValue: 'Viewer' }
 ]);
 
 const deletePlanningRecord = async (collectionName, docId) => {
@@ -1272,7 +1373,7 @@ const deletePlanningRecord = async (collectionName, docId) => {
 
 const setVaultTab = (tab) => {
     appState.vaultTab = tab;
-    ['accounts', 'debts', 'emis', 'budgets', 'wealth', 'goals'].forEach((item) => {
+    ['accounts', 'debts', 'emis', 'budgets', 'wealth', 'goals', 'family'].forEach((item) => {
         document.getElementById(`vault-${item}-panel`)?.classList.toggle('hidden', item !== tab);
         const btn = document.getElementById(`btn-vault-${item}`);
         if (!btn) return;
@@ -1511,7 +1612,7 @@ document.getElementById('backup-import-file')?.addEventListener('change', async 
 
     try {
         const backup = JSON.parse(await file.text());
-        const collections = ['accounts', 'transactions', 'scheduled_emis', 'budgets', 'investments', 'assets', 'liabilities', 'goals'];
+        const collections = ['accounts', 'transactions', 'scheduled_emis', 'budgets', 'investments', 'assets', 'liabilities', 'goals', 'family_members'];
         let imported = 0;
 
         for (const collectionName of collections) {
@@ -1559,12 +1660,15 @@ window.app = {
     applyTxnFilters,
     exportTransactionsCSV,
     exportReportPDF,
+    exportYearlyTaxReport,
     setVaultTab,
     addBudget,
     addInvestment,
     addAsset,
     addLiability,
     addGoal,
+    addFamilyMember,
+    savePlanningRecord,
     deletePlanningRecord,
     resetEmiModal,
     saveEmi,

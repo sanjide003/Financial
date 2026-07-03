@@ -16,6 +16,9 @@ test('critical production UI actions are wired in the app shell', () => {
   assert.match(html, /btn-vault-budgets/);
   assert.match(html, /btn-vault-wealth/);
   assert.match(html, /btn-vault-goals/);
+  assert.match(html, /btn-vault-family/);
+  assert.match(html, /modal-planning/);
+  assert.match(html, /exportYearlyTaxReport/);
 });
 
 test('app exposes handlers required by inline UI actions', () => {
@@ -26,4 +29,6 @@ test('app exposes handlers required by inline UI actions', () => {
   assert.match(app, /setSyncStatus/);
   assert.match(app, /addInvestment/);
   assert.match(app, /addGoal/);
+  assert.match(app, /addFamilyMember/);
+  assert.match(app, /savePlanningRecord/);
 });

@@ -329,6 +329,7 @@
                     <div class="flex items-center gap-2">
                         <button onclick="window.app.exportTransactionsCSV()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-primary">CSV</button>
                         <button onclick="window.app.exportReportPDF()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-blue-600">PDF</button>
+                        <button onclick="window.app.exportYearlyTaxReport()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-orange-600">Tax</button>
                         <input type="month" id="report-month" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-sm font-bold outline-none text-gray-700">
                     </div>
                 </div>
@@ -373,6 +374,7 @@
                     <button type="button" onclick="window.app.setVaultTab('budgets')" id="btn-vault-budgets" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Budget</button>
                     <button type="button" onclick="window.app.setVaultTab('wealth')" id="btn-vault-wealth" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Wealth</button>
                     <button type="button" onclick="window.app.setVaultTab('goals')" id="btn-vault-goals" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Goals</button>
+                    <button type="button" onclick="window.app.setVaultTab('family')" id="btn-vault-family" class="vault-tab py-2 text-xs font-bold uppercase rounded-md text-gray-500">Family</button>
                 </div>
 
                 <div id="vault-accounts-panel" class="vault-panel mb-8">
@@ -433,6 +435,15 @@
                         <button onclick="window.app.addGoal()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Goal</button>
                     </div>
                     <div id="goal-list" class="space-y-3"></div>
+                </div>
+
+                <div id="vault-family-panel" class="vault-panel hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Family Access</h2>
+                        <button onclick="window.app.addFamilyMember()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Member</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-3">Track family members and roles before enabling shared access rules.</p>
+                    <div id="family-list" class="space-y-3"></div>
                 </div>
             </section>
 
@@ -556,6 +567,17 @@
         <i class="fa-solid fa-circle-check text-green-400"></i> <span id="toast-msg">Message</span>
     </div>
     <input type="file" id="backup-import-file" accept="application/json" class="hidden">
+
+    <div id="modal-planning" class="app-modal fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-2xl w-11/12 max-w-sm p-6 shadow-2xl transform transition-transform scale-95">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="planning-modal-title">Add Item</h3>
+            <form id="planning-form" class="space-y-3"></form>
+            <div class="flex gap-3 mt-5">
+                <button onclick="window.app.hideModal('modal-planning')" class="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold text-sm uppercase tracking-wide">Cancel</button>
+                <button onclick="window.app.savePlanningRecord()" class="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-wide shadow-md">Save</button>
+            </div>
+        </div>
+    </div>
 
     <!-- PWA Registration -->
     <script>
