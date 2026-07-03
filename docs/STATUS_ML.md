@@ -21,8 +21,9 @@
 - PDF print/export, JSON backup export/import ചേർത്തു.
 - Draft privacy policy, terms, data retention, audit checklist, and full product roadmap ചേർത്തു.
 - Budget, investment, assets, liabilities, goals, and family member modules ചേർത്തു.
-- Prompt-based planning entry മാറ്റി modal-based forms ചേർത്തു.
-- Budget usage progress bars, recurring SIP/contribution fields, and yearly tax summary report ചേർത്തു.
+- Planning records add/edit ചെയ്യാൻ modal-based forms ചേർത്തു.
+- Budget usage progress bars, report charts, recurring SIP/contribution fields, user-confirmed SIP transaction generation, and yearly tax summary report ചേർത്തു.
+- Family sharedWith read-rule support and Apply Sharing action ചേർത്തു.
 - Dashboard true net worth, investment value, liabilities, and goals-funded cards ചേർത്തു.
 - Advanced report summary cards for investments and true net worth ചേർത്തു.
 - Static E2E smoke checks ചേർത്തു.
@@ -33,7 +34,7 @@
 3. Firebase Authentication Sign-in method-ൽ Email/Password enable ചെയ്യുക.
 4. Vercel project deploy ചെയ്യുക.
 5. Real browser Playwright/Cypress E2E suite add ചെയ്യുക.
-6. Existing planning records edit/update flows polish ചെയ്യുക.
+6. Shared records received from family members കാണിക്കുന്ന collaborative UI polish ചെയ്യുക.
 7. Remaining UI labels full Malayalam/English i18n dictionary-ലേക്ക് migrate ചെയ്യുക.
 8. Server-side scheduled/push notifications പരിഗണിക്കുക.
 9. Draft privacy policy/terms/data retention legal review ചെയ്ത് publish ചെയ്യുക.

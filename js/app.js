@@ -495,6 +495,14 @@ const exportReportPDF = () => {
     showToast(t('pdfReady'));
 };
 
+const getTaxCategory = (transaction) => {
+    const text = `${transaction.category || ''} ${transaction.note || ''}`.toLowerCase();
+    if (/(salary|business|interest|dividend|rent|bonus)/.test(text)) return 'Taxable income';
+    if (/(medical|insurance|lic|pf|nps|tuition|school|donation)/.test(text)) return 'Potential deductions';
+    if (/(investment|mutual|stock|gold|sip|fd|rd)/.test(text)) return 'Investments/capital';
+    return transaction.type === 'income' ? 'Other income' : 'Other expenses';
+};
+
 const exportYearlyTaxReport = () => {
     const year = (document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7)).slice(0, 4);
     const yearlyTransactions = appState.transactions.filter((transaction) => transaction.date?.startsWith(year));
@@ -503,6 +511,12 @@ const exportYearlyTaxReport = () => {
     const passiveIncome = sumBy(appState.investments, 'income');
     const investmentValue = sumBy(appState.investments, 'currentValue');
     const investmentCost = sumBy(appState.investments, 'invested');
+    const taxBuckets = yearlyTransactions.reduce((buckets, transaction) => {
+        const key = getTaxCategory(transaction);
+        buckets[key] = (buckets[key] || 0) + (parseFloat(transaction.amount) || 0);
+        return buckets;
+    }, {});
+    const taxRows = Object.entries(taxBuckets).map(([name, amount]) => `<tr><th>${escapeHtml(name)}</th><td>₹${amount.toFixed(2)}</td></tr>`).join('');
     const popup = window.open('', '_blank', 'width=720,height=900');
     if (!popup) return showToast(t('popupBlocked'));
 
@@ -529,6 +543,7 @@ const exportYearlyTaxReport = () => {
                 <tr><th>Investment cost</th><td>₹${investmentCost.toFixed(2)}</td></tr>
                 <tr><th>Investment current value</th><td>₹${investmentValue.toFixed(2)}</td></tr>
                 <tr><th>Unrealized investment gain/loss</th><td>₹${(investmentValue - investmentCost).toFixed(2)}</td></tr>
+                ${taxRows}
             </table>
             <p style="font-size:12px;color:#6b7280;margin-top:24px;">This is a personal summary, not tax advice. Verify with a tax professional.</p>
             <script>window.onload = () => window.print();<\/script>
@@ -799,6 +814,7 @@ const renderReports = () => {
     const month = document.getElementById('report-month').value;
     const report = window.calc.generateMonthlyReport(appState.transactions, month);
     updateWealthDashboard();
+    renderAdvancedCharts(month);
 
     document.getElementById('rep-income').innerText = `₹${report.income.toFixed(2)}`;
     document.getElementById('rep-expense').innerText = `₹${report.expense.toFixed(2)}`;
@@ -1223,6 +1239,42 @@ const getBudgetSpent = (budget) => {
         .reduce((total, transaction) => total + (parseFloat(transaction.amount) || 0), 0);
 };
 
+const renderAdvancedCharts = (month = new Date().toISOString().slice(0, 7)) => {
+    const container = document.getElementById('advanced-report-charts');
+    if (!container) return;
+    const budgetCharts = appState.budgets.map((budget) => {
+        const limit = parseFloat(budget.limit) || 0;
+        const spent = getBudgetSpent({ ...budget, month });
+        const percent = limit ? Math.min((spent / limit) * 100, 100) : 0;
+        return `
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="font-bold text-gray-700">Budget: ${escapeHtml(budget.category)}</span>
+                    <span class="text-gray-500">₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</span>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div>
+            </div>
+        `;
+    });
+    const investmentCharts = appState.investments.map((investment) => {
+        const invested = parseFloat(investment.invested) || 0;
+        const current = parseFloat(investment.currentValue) || 0;
+        const gain = current - invested;
+        const percent = invested ? Math.max(Math.min((current / invested) * 100, 160), 0) : 0;
+        return `
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="font-bold text-gray-700">Investment: ${escapeHtml(investment.name)}</span>
+                    <span class="${gain >= 0 ? 'text-green-600' : 'text-red-600'}">Gain ₹${gain.toFixed(2)}</span>
+                </div>
+                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${gain >= 0 ? 'bg-purple-500' : 'bg-red-500'} rounded-full" style="width:${percent}%"></div></div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = [...budgetCharts, ...investmentCharts].join('') || '<p class="text-sm text-gray-500 text-center py-4">No planning data yet</p>';
+};
+
 const renderWealthModules = () => {
     renderSimpleRows('budget-list', appState.budgets, 'No budgets added.', (item) => {
         const limit = parseFloat(item.limit) || 0;
@@ -1235,7 +1287,10 @@ const renderWealthModules = () => {
                         <p class="text-sm font-bold text-gray-800">${escapeHtml(item.category)}</p>
                         <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.month || 'Monthly')} • Spent ₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</p>
                     </div>
-                    <button onclick="window.app.deletePlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="window.app.editPlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                        <button onclick="window.app.deletePlanningRecord('budgets', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                    </div>
                 </div>
                 <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div>
             </div>
@@ -1255,7 +1310,11 @@ const renderWealthModules = () => {
             </div>
             <div class="text-right">
                 <p class="text-sm font-bold ${item.color}">₹${(parseFloat(item.amount) || 0).toFixed(2)}</p>
-                <button onclick="window.app.deletePlanningRecord('${item.collection}', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                <div class="flex gap-2 justify-end">
+                    ${item.collection === 'investments' && item.sipAmount ? `<button onclick="window.app.generateRecurringInvestment('${item.id}')" class="text-[10px] font-bold text-green-600">SIP</button>` : ''}
+                    <button onclick="window.app.editPlanningRecord('${item.collection}', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                    <button onclick="window.app.deletePlanningRecord('${item.collection}', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                </div>
             </div>
         </div>
     `);
@@ -1271,7 +1330,10 @@ const renderWealthModules = () => {
                         <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
                         <p class="text-[10px] text-gray-400 font-semibold">₹${saved.toFixed(2)} / ₹${target.toFixed(2)}</p>
                     </div>
-                    <button onclick="window.app.deletePlanningRecord('goals', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="window.app.editPlanningRecord('goals', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                        <button onclick="window.app.deletePlanningRecord('goals', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+                    </div>
                 </div>
                 <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 bg-primary rounded-full" style="width:${percent}%"></div></div>
             </div>
@@ -1284,13 +1346,80 @@ const renderWealthModules = () => {
                 <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name)}</p>
                 <p class="text-[10px] text-gray-400 font-semibold">${escapeHtml(item.email)} • ${escapeHtml(item.role || 'Viewer')}</p>
             </div>
-            <button onclick="window.app.deletePlanningRecord('family_members', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+            <div class="flex gap-2 justify-end">
+                <button onclick="window.app.editPlanningRecord('family_members', '${item.id}')" class="text-[10px] font-bold text-blue-500">Edit</button>
+                <button onclick="window.app.deletePlanningRecord('family_members', '${item.id}')" class="text-[10px] font-bold text-red-500">Delete</button>
+            </div>
         </div>
     `);
 };
 
-const openPlanningModal = (collectionName, title, fields) => {
-    appState.planningModal = { collectionName, fields };
+const planningConfigs = {
+    budgets: {
+        title: 'Budget',
+        fields: [
+            { key: 'category', label: 'Budget category', defaultValue: 'Food', required: true },
+            { key: 'month', label: 'Month (YYYY-MM or Monthly)', defaultValue: new Date().toISOString().slice(0, 7) },
+            { key: 'limit', label: 'Budget limit amount', type: 'number', required: true }
+        ]
+    },
+    investments: {
+        title: 'Investment',
+        fields: [
+            { key: 'name', label: 'Investment name', defaultValue: 'Mutual Fund', required: true },
+            { key: 'type', label: 'Type', defaultValue: 'Mutual Fund' },
+            { key: 'invested', label: 'Total invested amount', type: 'number' },
+            { key: 'currentValue', label: 'Current value', type: 'number', required: true },
+            { key: 'income', label: 'Dividend/interest/rent income', type: 'number' },
+            { key: 'sipAmount', label: 'Recurring SIP/contribution amount', type: 'number' },
+            { key: 'frequency', label: 'Frequency', defaultValue: 'Monthly' }
+        ]
+    },
+    assets: {
+        title: 'Asset',
+        fields: [
+            { key: 'name', label: 'Asset name', defaultValue: 'Gold', required: true },
+            { key: 'type', label: 'Type', defaultValue: 'Gold' },
+            { key: 'value', label: 'Current value', type: 'number', required: true }
+        ]
+    },
+    liabilities: {
+        title: 'Liability',
+        fields: [
+            { key: 'name', label: 'Liability name', defaultValue: 'Credit Card', required: true },
+            { key: 'type', label: 'Type', defaultValue: 'Loan' },
+            { key: 'balance', label: 'Outstanding balance', type: 'number', required: true }
+        ]
+    },
+    goals: {
+        title: 'Goal',
+        fields: [
+            { key: 'name', label: 'Goal name', defaultValue: 'Emergency Fund', required: true },
+            { key: 'target', label: 'Target amount', type: 'number', required: true },
+            { key: 'saved', label: 'Saved amount', type: 'number' }
+        ]
+    },
+    family_members: {
+        title: 'Family Member',
+        fields: [
+            { key: 'name', label: 'Member name', required: true },
+            { key: 'email', label: 'Email', required: true },
+            { key: 'role', label: 'Role', defaultValue: 'Viewer' }
+        ]
+    }
+};
+
+const getPlanningRows = (collectionName) => {
+    if (collectionName === 'family_members') return appState.familyMembers;
+    return appState[collectionName] || [];
+};
+
+const getFamilyShareEmails = () => appState.familyMembers
+    .map((member) => (member.email || '').trim().toLowerCase())
+    .filter(Boolean);
+
+const openPlanningModal = (collectionName, title, fields, existingRecord = null) => {
+    appState.planningModal = { collectionName, fields, editingId: existingRecord?.id || null };
     document.getElementById('planning-modal-title').innerText = title;
     document.getElementById('planning-form').innerHTML = fields.map((field) => `
         <label class="block">
@@ -1300,7 +1429,7 @@ const openPlanningModal = (collectionName, title, fields) => {
                 step="${field.type === 'number' ? '0.01' : ''}"
                 data-planning-field="${field.key}"
                 ${field.required ? 'required' : ''}
-                value="${escapeHtml(field.defaultValue || '')}"
+                value="${escapeHtml(existingRecord?.[field.key] ?? field.defaultValue ?? '')}"
                 class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 outline-none focus:border-primary text-sm font-medium"
             >
         </label>
@@ -1310,8 +1439,14 @@ const openPlanningModal = (collectionName, title, fields) => {
 
 const savePlanningRecord = async () => {
     if (!appState.user || !appState.planningModal) return;
-    const { collectionName, fields } = appState.planningModal;
-    const data = { userId: appState.user.uid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const { collectionName, fields, editingId } = appState.planningModal;
+    const existingRecord = editingId ? getPlanningRows(collectionName).find((item) => item.id === editingId) : null;
+    const data = {
+        userId: appState.user.uid,
+        createdAt: existingRecord?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sharedWith: getFamilyShareEmails()
+    };
 
     for (const field of fields) {
         const input = document.querySelector(`[data-planning-field="${field.key}"]`);
@@ -1320,50 +1455,67 @@ const savePlanningRecord = async () => {
         if (field.required && !data[field.key]) return showToast(`${field.label} is required`);
     }
 
-    await window.db.addRecord(collectionName, data);
+    if (editingId) await window.db.updateRecord(collectionName, editingId, data);
+    else await window.db.addRecord(collectionName, data);
     hideModal('modal-planning');
     showToast('Saved successfully');
 };
 
-const addBudget = () => openPlanningModal('budgets', 'Add Budget', [
-    { key: 'category', label: 'Budget category', defaultValue: 'Food', required: true },
-    { key: 'month', label: 'Month (YYYY-MM or Monthly)', defaultValue: new Date().toISOString().slice(0, 7) },
-    { key: 'limit', label: 'Budget limit amount', type: 'number', required: true }
-]);
+const openPlanningConfig = (collectionName, existingRecord = null) => {
+    const config = planningConfigs[collectionName];
+    openPlanningModal(collectionName, `${existingRecord ? 'Edit' : 'Add'} ${config.title}`, config.fields, existingRecord);
+};
 
-const addInvestment = () => openPlanningModal('investments', 'Add Investment', [
-    { key: 'name', label: 'Investment name', defaultValue: 'Mutual Fund', required: true },
-    { key: 'type', label: 'Type', defaultValue: 'Mutual Fund' },
-    { key: 'invested', label: 'Total invested amount', type: 'number' },
-    { key: 'currentValue', label: 'Current value', type: 'number', required: true },
-    { key: 'income', label: 'Dividend/interest/rent income', type: 'number' },
-    { key: 'sipAmount', label: 'Recurring SIP/contribution amount', type: 'number' },
-    { key: 'frequency', label: 'Frequency', defaultValue: 'Monthly' }
-]);
+const addBudget = () => openPlanningConfig('budgets');
+const addInvestment = () => openPlanningConfig('investments');
+const addAsset = () => openPlanningConfig('assets');
+const addLiability = () => openPlanningConfig('liabilities');
+const addGoal = () => openPlanningConfig('goals');
+const addFamilyMember = () => openPlanningConfig('family_members');
 
-const addAsset = () => openPlanningModal('assets', 'Add Asset', [
-    { key: 'name', label: 'Asset name', defaultValue: 'Gold', required: true },
-    { key: 'type', label: 'Type', defaultValue: 'Gold' },
-    { key: 'value', label: 'Current value', type: 'number', required: true }
-]);
+const editPlanningRecord = (collectionName, docId) => {
+    const record = getPlanningRows(collectionName).find((item) => item.id === docId);
+    if (!record) return showToast('Item not found');
+    openPlanningConfig(collectionName, record);
+};
 
-const addLiability = () => openPlanningModal('liabilities', 'Add Liability', [
-    { key: 'name', label: 'Liability name', defaultValue: 'Credit Card', required: true },
-    { key: 'type', label: 'Type', defaultValue: 'Loan' },
-    { key: 'balance', label: 'Outstanding balance', type: 'number', required: true }
-]);
+const applyFamilySharing = async () => {
+    const sharedWith = getFamilyShareEmails();
+    const collections = ['budgets', 'investments', 'assets', 'liabilities', 'goals'];
+    await Promise.all(collections.flatMap((collectionName) =>
+        getPlanningRows(collectionName).map((item) => window.db.updateRecord(collectionName, item.id, { sharedWith, updatedAt: new Date().toISOString() }))
+    ));
+    showToast('Family sharing emails applied to planning records.');
+};
 
-const addGoal = () => openPlanningModal('goals', 'Add Goal', [
-    { key: 'name', label: 'Goal name', defaultValue: 'Emergency Fund', required: true },
-    { key: 'target', label: 'Target amount', type: 'number', required: true },
-    { key: 'saved', label: 'Saved amount', type: 'number' }
-]);
+const generateRecurringInvestment = async (investmentId) => {
+    const investment = appState.investments.find((item) => item.id === investmentId);
+    const amount = parseFloat(investment?.sipAmount) || 0;
+    if (!investment || amount <= 0) return showToast('No SIP amount configured.');
+    const accountId = appState.accounts[0]?.id;
+    if (!accountId) return showToast('Create an account before generating SIP transaction.');
+    if (!confirm(`Create SIP transaction for ${investment.name} worth ₹${amount.toFixed(2)} from ${appState.accounts[0].name}?`)) return;
 
-const addFamilyMember = () => openPlanningModal('family_members', 'Add Family Member', [
-    { key: 'name', label: 'Member name', required: true },
-    { key: 'email', label: 'Email', required: true },
-    { key: 'role', label: 'Role', defaultValue: 'Viewer' }
-]);
+    await window.db.addRecord('transactions', {
+        userId: appState.user.uid,
+        type: 'expense',
+        amount,
+        category: `Investment - ${investment.name}`,
+        from_account: accountId,
+        date: new Date().toISOString().slice(0, 10),
+        note: `${investment.frequency || 'Monthly'} recurring contribution`,
+        investmentId,
+        timestamp: new Date().toISOString()
+    });
+    await window.db.updateRecord('investments', investmentId, {
+        invested: (parseFloat(investment.invested) || 0) + amount,
+        currentValue: (parseFloat(investment.currentValue) || 0) + amount,
+        lastContributionAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sharedWith: getFamilyShareEmails()
+    });
+    showToast('SIP transaction generated.');
+};
 
 const deletePlanningRecord = async (collectionName, docId) => {
     if (!confirm('Delete this item?')) return;
@@ -1669,6 +1821,9 @@ window.app = {
     addGoal,
     addFamilyMember,
     savePlanningRecord,
+    editPlanningRecord,
+    applyFamilySharing,
+    generateRecurringInvestment,
     deletePlanningRecord,
     resetEmiModal,
     saveEmi,

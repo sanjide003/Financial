@@ -363,6 +363,12 @@
                         <p class="text-sm text-gray-500 text-center py-4">No data for selected month</p>
                     </div>
                 </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mt-4">
+                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-4">Budget & Investment Charts</h3>
+                    <div id="advanced-report-charts" class="space-y-4">
+                        <p class="text-sm text-gray-500 text-center py-4">No planning data yet</p>
+                    </div>
+                </div>
             </section>
 
             <!-- VIEW: ACCOUNTS & DEBTS -->
@@ -440,7 +446,10 @@
                 <div id="vault-family-panel" class="vault-panel hidden">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-gray-800">Family Access</h2>
-                        <button onclick="window.app.addFamilyMember()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add Member</button>
+                        <div class="flex gap-2">
+                            <button onclick="window.app.applyFamilySharing()" class="text-blue-600 font-bold text-xs uppercase tracking-wide bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">Apply</button>
+                            <button onclick="window.app.addFamilyMember()" class="text-primary font-bold text-xs uppercase tracking-wide bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">+ Add</button>
+                        </div>
                     </div>
                     <p class="text-xs text-gray-500 mb-3">Track family members and roles before enabling shared access rules.</p>
                     <div id="family-list" class="space-y-3"></div>

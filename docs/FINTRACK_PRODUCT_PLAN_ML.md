@@ -51,15 +51,15 @@
 - Goal records with target/saved progress.
 - Dashboard true net worth, investment value, liabilities, and goal progress cards.
 - Reports investment and true net worth summary cards.
-- Modal-based entry for budget, investment, asset, liability, goal, and family member records.
+- Modal-based add/edit entry for budget, investment, asset, liability, goal, and family member records.
 - Budget usage progress bars based on matching monthly expense category.
-- Recurring SIP/contribution tracking fields for investments.
-- Yearly tax summary print/PDF report.
-- Family member role tracking panel.
+- Report charts for budget usage and investment gain/loss.
+- Recurring SIP/contribution tracking and user-confirmed SIP transaction generation.
+- Yearly tax summary print/PDF report with tax category grouping.
+- Family member role tracking and sharedWith read-rule support for planning records.
 
 ## Next implementation order
-1. Add edit/update modal flows for existing planning records.
-2. Add richer charts for investment growth and budget history.
-3. Add automatic recurring transaction generation after explicit user confirmation.
-4. Add actual shared Firestore permissions for family members if needed.
-5. Add real tax category mapping and accountant-ready export.
+1. Add richer historical charts with a charting library if needed.
+2. Add automatic recurring transaction generation only after explicit schedule consent.
+3. Add accountant-ready export formats per local tax rules.
+4. Add collaborative UI for shared records received from family members.
