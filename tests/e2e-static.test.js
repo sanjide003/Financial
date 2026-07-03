@@ -19,6 +19,9 @@ test('critical production UI actions are wired in the app shell', () => {
   assert.match(html, /btn-vault-family/);
   assert.match(html, /modal-planning/);
   assert.match(html, /exportYearlyTaxReport/);
+  assert.match(html, /exportAccountantTaxCSV/);
+  assert.match(html, /shared-with-me-list/);
+  assert.match(html, /Chart\.js/);
   assert.match(html, /applyFamilySharing/);
 });
 
@@ -34,4 +37,14 @@ test('app exposes handlers required by inline UI actions', () => {
   assert.match(app, /savePlanningRecord/);
   assert.match(app, /editPlanningRecord/);
   assert.match(app, /generateRecurringInvestment/);
+  assert.match(app, /processAutomaticRecurringInvestments/);
+  assert.match(app, /renderAdvancedCharts/);
+  assert.match(app, /getIndianTaxSection/);
+});
+
+
+test('shared family listener is available for collaborative records', async () => {
+  const db = await readFile('js/db.js', 'utf8');
+  assert.match(db, /listenToSharedData/);
+  assert.match(db, /array-contains/);
 });

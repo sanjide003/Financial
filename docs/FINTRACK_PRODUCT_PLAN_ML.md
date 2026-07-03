@@ -63,3 +63,9 @@
 2. Add automatic recurring transaction generation only after explicit schedule consent.
 3. Add accountant-ready export formats per local tax rules.
 4. Add collaborative UI for shared records received from family members.
+
+## Phase 8 — Optional Advanced Polish Completed
+- Rich historical charts: Chart.js line/bar charts for budget history, expenses, and investment performance.
+- Automatic recurring schedule engine: opt-in investment SIP auto-generation with monthly guard to avoid duplicate entries.
+- Accountant export: local India-oriented tax bucket CSV for accountant review and filing preparation.
+- Collaborative UI: family-shared planning records now appear in a read-only “Shared With Me” panel.

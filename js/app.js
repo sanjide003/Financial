@@ -11,6 +11,9 @@ let appState = {
     liabilities: [],
     goals: [],
     familyMembers: [],
+    sharedPlanning: { budgets: [], investments: [], assets: [], liabilities: [], goals: [] },
+    chartInstances: {},
+    generatedRecurringKeys: new Set(),
     planningModal: null,
     generatedDebtReminderKeys: new Set(),
     activeTxnFilter: 'all',
@@ -154,9 +157,22 @@ const initAfterAuth = (user) => {
             appState[stateKey] = data.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
             updateDashboard();
             renderWealthModules();
+            if (collectionName === 'investments') processAutomaticRecurringInvestments();
             if(document.getElementById('view-reports').classList.contains('active')) renderReports();
         });
     });
+
+    if (user.email && window.db.listenToSharedData) {
+        ['budgets', 'investments', 'assets', 'liabilities', 'goals'].forEach((collectionName) => {
+            window.db.listenToSharedData(user.email, collectionName, (data, metadata) => {
+                updateSyncStatusFromSnapshot(metadata);
+                appState.sharedPlanning[collectionName] = data
+                    .filter((item) => item.userId !== user.uid)
+                    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+                renderWealthModules();
+            });
+        });
+    }
 
     // Setup initial dates
     document.getElementById('form-date').valueAsDate = new Date();
@@ -178,6 +194,7 @@ const updateAccountsUI = () => {
     updateDashboard();
     renderEmis();
     renderWealthModules();
+    processAutomaticRecurringInvestments();
 };
 
 const sumBy = (items, field) => items.reduce((total, item) => total + (parseFloat(item[field]) || 0), 0);
@@ -412,6 +429,24 @@ const csvEscape = (value = '') => {
     return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };
 
+
+const downloadCsv = (filename, rows) => {
+    const headers = Object.keys(rows[0] || {});
+    const csv = [
+        headers.join(','),
+        ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+};
+
 const exportTransactionsCSV = () => {
     const reportMonth = document.getElementById('view-reports')?.classList.contains('active')
         ? document.getElementById('report-month')?.value
@@ -552,6 +587,43 @@ const exportYearlyTaxReport = () => {
     `);
     popup.document.close();
     showToast(t('pdfReady'));
+};
+
+
+const getIndianTaxSection = (transaction) => {
+    const text = `${transaction.category || ''} ${transaction.note || ''}`.toLowerCase();
+    if (/(lic|ppf|pf|elss|tuition|school|principal|80c)/.test(text)) return '80C - common deduction bucket';
+    if (/(health insurance|medical insurance|mediclaim|80d)/.test(text)) return '80D - health insurance bucket';
+    if (/(home loan interest|housing loan interest|24b|24\(b\))/.test(text)) return 'Section 24(b) - home loan interest bucket';
+    if (/(donation|80g)/.test(text)) return '80G - donation bucket';
+    if (/(hra|house rent|rent paid)/.test(text)) return 'HRA/rent documentation bucket';
+    if (/(interest|fd|rd|savings bank)/.test(text)) return 'Interest income bucket';
+    if (/(dividend)/.test(text)) return 'Dividend income bucket';
+    if (/(stock|mutual|sip|elss|capital gain|gold|crypto)/.test(text)) return 'Capital/investment bucket';
+    if (transaction.type === 'income') return 'General income bucket';
+    return 'General expense bucket';
+};
+
+const exportAccountantTaxCSV = () => {
+    const year = (document.getElementById('report-month')?.value || new Date().toISOString().slice(0, 7)).slice(0, 4);
+    const accountById = Object.fromEntries(appState.accounts.map((account) => [account.id, account.name]));
+    const rows = appState.transactions
+        .filter((transaction) => transaction.date?.startsWith(year))
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map((transaction) => ({
+            Date: transaction.date || '',
+            Type: transaction.type || '',
+            Category: transaction.category || '',
+            TaxBucket: getTaxCategory(transaction),
+            LocalTaxSection: getIndianTaxSection(transaction),
+            Amount: (parseFloat(transaction.amount) || 0).toFixed(2),
+            Account: accountById[transaction.from_account] || accountById[transaction.to_account] || '',
+            Note: transaction.note || '',
+            Person: transaction.person || ''
+        }));
+    if (!rows.length) return showToast('No tax transactions for selected year.');
+    downloadCsv(`fintrack-accountant-tax-${year}.csv`, rows);
+    showToast('Accountant tax CSV exported. Verify with a tax professional.');
 };
 
 const downloadJson = (filename, payload) => {
@@ -1239,40 +1311,86 @@ const getBudgetSpent = (budget) => {
         .reduce((total, transaction) => total + (parseFloat(transaction.amount) || 0), 0);
 };
 
-const renderAdvancedCharts = (month = new Date().toISOString().slice(0, 7)) => {
-    const container = document.getElementById('advanced-report-charts');
-    if (!container) return;
+const getMonthSeries = (endMonth, count = 6) => {
+    const [year, month] = endMonth.split('-').map(Number);
+    const end = new Date(year, month - 1, 1);
+    return Array.from({ length: count }, (_, index) => {
+        const date = new Date(end.getFullYear(), end.getMonth() - (count - index - 1), 1);
+        return date.toISOString().slice(0, 7);
+    });
+};
+
+const destroyChart = (key) => {
+    if (appState.chartInstances[key]) {
+        appState.chartInstances[key].destroy();
+        delete appState.chartInstances[key];
+    }
+};
+
+const renderFallbackCharts = (container, month) => {
     const budgetCharts = appState.budgets.map((budget) => {
         const limit = parseFloat(budget.limit) || 0;
         const spent = getBudgetSpent({ ...budget, month });
         const percent = limit ? Math.min((spent / limit) * 100, 100) : 0;
-        return `
-            <div>
-                <div class="flex justify-between text-xs mb-1">
-                    <span class="font-bold text-gray-700">Budget: ${escapeHtml(budget.category)}</span>
-                    <span class="text-gray-500">₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</span>
-                </div>
-                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div>
-            </div>
-        `;
+        return `<div><div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-700">Budget: ${escapeHtml(budget.category)}</span><span class="text-gray-500">₹${spent.toFixed(2)} / ₹${limit.toFixed(2)}</span></div><div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${spent > limit ? 'bg-red-500' : 'bg-primary'} rounded-full" style="width:${percent}%"></div></div></div>`;
     });
     const investmentCharts = appState.investments.map((investment) => {
         const invested = parseFloat(investment.invested) || 0;
         const current = parseFloat(investment.currentValue) || 0;
         const gain = current - invested;
         const percent = invested ? Math.max(Math.min((current / invested) * 100, 160), 0) : 0;
-        return `
-            <div>
-                <div class="flex justify-between text-xs mb-1">
-                    <span class="font-bold text-gray-700">Investment: ${escapeHtml(investment.name)}</span>
-                    <span class="${gain >= 0 ? 'text-green-600' : 'text-red-600'}">Gain ₹${gain.toFixed(2)}</span>
-                </div>
-                <div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${gain >= 0 ? 'bg-purple-500' : 'bg-red-500'} rounded-full" style="width:${percent}%"></div></div>
-            </div>
-        `;
+        return `<div><div class="flex justify-between text-xs mb-1"><span class="font-bold text-gray-700">Investment: ${escapeHtml(investment.name)}</span><span class="${gain >= 0 ? 'text-green-600' : 'text-red-600'}">Gain ₹${gain.toFixed(2)}</span></div><div class="h-2 bg-gray-100 rounded-full"><div class="h-2 ${gain >= 0 ? 'bg-purple-500' : 'bg-red-500'} rounded-full" style="width:${percent}%"></div></div></div>`;
     });
-
     container.innerHTML = [...budgetCharts, ...investmentCharts].join('') || '<p class="text-sm text-gray-500 text-center py-4">No planning data yet</p>';
+};
+
+const renderAdvancedCharts = (month = new Date().toISOString().slice(0, 7)) => {
+    const container = document.getElementById('advanced-report-charts');
+    if (!container) return;
+    if (!window.Chart) return renderFallbackCharts(container, month);
+
+    const months = getMonthSeries(month, 6);
+    const budgetLimitByMonth = months.map((seriesMonth) => appState.budgets.reduce((total, budget) => {
+        const applies = !budget.month || budget.month === 'Monthly' || budget.month === seriesMonth;
+        return applies ? total + (parseFloat(budget.limit) || 0) : total;
+    }, 0));
+    const expenseByMonth = months.map((seriesMonth) => appState.transactions
+        .filter((transaction) => transaction.type === 'expense' && transaction.date?.startsWith(seriesMonth))
+        .reduce((total, transaction) => total + (parseFloat(transaction.amount) || 0), 0));
+
+    const investmentLabels = appState.investments.map((investment) => investment.name || investment.type || 'Investment');
+    const investedData = appState.investments.map((investment) => parseFloat(investment.invested) || 0);
+    const currentValueData = appState.investments.map((investment) => parseFloat(investment.currentValue) || 0);
+
+    container.innerHTML = `
+        <div>
+            <p class="text-xs font-bold text-gray-700 mb-2">6-month budget history</p>
+            <canvas id="budget-history-chart" height="180" aria-label="Budget history chart"></canvas>
+        </div>
+        <div>
+            <p class="text-xs font-bold text-gray-700 mb-2">Investment cost vs current value</p>
+            <canvas id="investment-performance-chart" height="180" aria-label="Investment performance chart"></canvas>
+        </div>
+    `;
+
+    destroyChart('budgetHistory');
+    destroyChart('investmentPerformance');
+    appState.chartInstances.budgetHistory = new Chart(document.getElementById('budget-history-chart'), {
+        type: 'line',
+        data: { labels: months, datasets: [
+            { label: 'Expenses', data: expenseByMonth, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', tension: 0.35, fill: true },
+            { label: 'Budget limit', data: budgetLimitByMonth, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.10)', tension: 0.35, fill: true }
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+    });
+    appState.chartInstances.investmentPerformance = new Chart(document.getElementById('investment-performance-chart'), {
+        type: 'bar',
+        data: { labels: investmentLabels.length ? investmentLabels : ['No investments'], datasets: [
+            { label: 'Invested', data: investedData.length ? investedData : [0], backgroundColor: '#a78bfa' },
+            { label: 'Current value', data: currentValueData.length ? currentValueData : [0], backgroundColor: '#10b981' }
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+    });
 };
 
 const renderWealthModules = () => {
@@ -1352,6 +1470,18 @@ const renderWealthModules = () => {
             </div>
         </div>
     `);
+
+
+    const sharedRows = Object.entries(appState.sharedPlanning || {}).flatMap(([collectionName, rows]) =>
+        rows.map((item) => ({ ...item, collectionName }))
+    );
+    renderSimpleRows('shared-with-me-list', sharedRows, 'No shared family records received yet.', (item) => `
+        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+            <p class="text-sm font-bold text-gray-800">${escapeHtml(item.name || item.category || item.type || 'Shared record')}</p>
+            <p class="text-[10px] text-blue-700 font-semibold uppercase tracking-wide">${escapeHtml(item.collectionName.replace('_', ' '))} • Owner ${escapeHtml(item.userId || 'Family')}</p>
+            <p class="text-[10px] text-gray-500 mt-1">Read-only collaborative view. Ask the owner to edit shared values.</p>
+        </div>
+    `);
 };
 
 const planningConfigs = {
@@ -1372,7 +1502,9 @@ const planningConfigs = {
             { key: 'currentValue', label: 'Current value', type: 'number', required: true },
             { key: 'income', label: 'Dividend/interest/rent income', type: 'number' },
             { key: 'sipAmount', label: 'Recurring SIP/contribution amount', type: 'number' },
-            { key: 'frequency', label: 'Frequency', defaultValue: 'Monthly' }
+            { key: 'frequency', label: 'Frequency', defaultValue: 'Monthly' },
+            { key: 'autoGenerate', label: 'Auto-generate monthly SIP? (Yes/No)', defaultValue: 'No' },
+            { key: 'dayOfMonth', label: 'Auto SIP day of month', type: 'number', defaultValue: 1 }
         ]
     },
     assets: {
@@ -1515,6 +1647,43 @@ const generateRecurringInvestment = async (investmentId) => {
         sharedWith: getFamilyShareEmails()
     });
     showToast('SIP transaction generated.');
+};
+
+
+const processAutomaticRecurringInvestments = async () => {
+    if (!appState.user || !appState.accounts.length) return;
+    const today = new Date();
+    const currentMonth = today.toISOString().slice(0, 7);
+    for (const investment of appState.investments) {
+        const amount = parseFloat(investment.sipAmount) || 0;
+        const shouldAutoGenerate = String(investment.autoGenerate || '').toLowerCase() === 'yes';
+        const dueDay = Math.min(Math.max(parseInt(investment.dayOfMonth || 1, 10) || 1, 1), 28);
+        const key = `${investment.id}-${currentMonth}`;
+        if (!shouldAutoGenerate || amount <= 0 || investment.lastContributionMonth === currentMonth || today.getDate() < dueDay || appState.generatedRecurringKeys.has(key)) continue;
+        appState.generatedRecurringKeys.add(key);
+        const account = appState.accounts[0];
+        await window.db.addRecord('transactions', {
+            userId: appState.user.uid,
+            type: 'expense',
+            amount,
+            category: `Investment - ${investment.name}`,
+            from_account: account.id,
+            date: today.toISOString().slice(0, 10),
+            note: `Automatic ${investment.frequency || 'Monthly'} SIP contribution`,
+            investmentId: investment.id,
+            recurringGenerated: true,
+            timestamp: today.toISOString()
+        });
+        await window.db.updateRecord('investments', investment.id, {
+            invested: (parseFloat(investment.invested) || 0) + amount,
+            currentValue: (parseFloat(investment.currentValue) || 0) + amount,
+            lastContributionMonth: currentMonth,
+            lastContributionAt: today.toISOString(),
+            updatedAt: today.toISOString(),
+            sharedWith: getFamilyShareEmails()
+        });
+        window.db.addNotification?.(appState.user.uid, 'Auto SIP generated', `${investment.name}: ₹${amount.toFixed(2)} added from ${account.name}`);
+    }
 };
 
 const deletePlanningRecord = async (collectionName, docId) => {
@@ -1813,6 +1982,7 @@ window.app = {
     exportTransactionsCSV,
     exportReportPDF,
     exportYearlyTaxReport,
+    exportAccountantTaxCSV,
     setVaultTab,
     addBudget,
     addInvestment,
@@ -1824,6 +1994,7 @@ window.app = {
     editPlanningRecord,
     applyFamilySharing,
     generateRecurringInvestment,
+    processAutomaticRecurringInvestments,
     deletePlanningRecord,
     resetEmiModal,
     saveEmi,

@@ -43,3 +43,9 @@
 ## Release readiness
 - Current level: MVP / beta-ready after Firebase rules deployment.
 - Not yet: fully public production-ready financial app.
+
+## Optional Advanced Polish — Completed
+- Chart.js ഉപയോഗിച്ച് reports-ൽ 6-month budget history, expense trend, investment cost vs current value charts ചേർത്തു.
+- Investment records-ൽ `autoGenerate=Yes`, `dayOfMonth`, `sipAmount` ഉപയോഗിച്ച് monthly SIP transaction സ്വയം generate ചെയ്യുന്ന recurring engine ചേർത്തു.
+- Accountant handover-നായി Indian tax bucket/section hints ഉൾപ്പെട്ട Tax CSV export ചേർത്തു. ഇത് tax advice അല്ല; accountant/legal review നിർബന്ധമാണ്.
+- Family members share ചെയ്ത planning records `Shared With Me` collaborative read-only panel-ൽ കാണിക്കുന്ന flow ചേർത്തു.

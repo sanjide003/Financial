@@ -11,6 +11,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for richer reports -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
@@ -330,6 +332,7 @@
                         <button onclick="window.app.exportTransactionsCSV()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-primary">CSV</button>
                         <button onclick="window.app.exportReportPDF()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-blue-600">PDF</button>
                         <button onclick="window.app.exportYearlyTaxReport()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-orange-600">Tax</button>
+                        <button onclick="window.app.exportAccountantTaxCSV()" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase text-purple-600">Tax CSV</button>
                         <input type="month" id="report-month" class="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-1.5 text-sm font-bold outline-none text-gray-700">
                     </div>
                 </div>
@@ -453,6 +456,10 @@
                     </div>
                     <p class="text-xs text-gray-500 mb-3">Track family members and roles before enabling shared access rules.</p>
                     <div id="family-list" class="space-y-3"></div>
+                    <div class="mt-5 pt-4 border-t border-gray-100">
+                        <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">Shared With Me</h3>
+                        <div id="shared-with-me-list" class="space-y-3"></div>
+                    </div>
                 </div>
             </section>
 

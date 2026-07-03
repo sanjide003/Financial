@@ -26,6 +26,30 @@ const listenToData = (userId, collectionName, callback, extraConditions = []) =>
     activeUnsubscribes.push(unsubscribe);
 };
 
+const listenToSharedData = (userEmail, collectionName, callback) => {
+    const normalizedEmail = (userEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) return;
+
+    const q = query(
+        collection(db, collectionName),
+        where('sharedWith', 'array-contains', normalizedEmail)
+    );
+
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data(), sharedCollection: collectionName }));
+        callback(data, {
+            fromCache: snapshot.metadata.fromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        });
+    }, (error) => {
+        console.error(`Error fetching shared ${collectionName}:`, error);
+        window.app?.setSyncStatus?.('error');
+    });
+
+    activeUnsubscribes.push(unsubscribe);
+};
+
 const addRecord = async (collectionName, data) => {
     try {
         const docRef = await addDoc(collection(db, collectionName), data);
@@ -78,6 +102,6 @@ const markAllNotificationsRead = async (userId) => {
     window.app.showToast('Notifications marked as read');
 };
 
-window.db = { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };
+window.db = { listenToData, listenToSharedData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };
 
-export { listenToData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };
+export { listenToData, listenToSharedData, addRecord, upsertUser, updateRecord, deleteRecord, addNotification, clearNotifications, markAllNotificationsRead };
