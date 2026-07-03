@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "development": "your-fintrack-dev-project-id",
+    "staging": "your-fintrack-staging-project-id",
+    "production": "your-fintrack-prod-project-id"
+  }
+}
